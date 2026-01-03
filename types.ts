@@ -71,6 +71,7 @@ export interface User {
   id: string;
   name: string;
   email: string;
+  mobile?: string;
   role: UserRole;
   companyId: string;
   password?: string;
@@ -148,9 +149,6 @@ export interface MonthlySalarySlip {
   generatedDate: string;
 }
 
-/**
- * SubscriptionPlan interface added to fix missing export error in components/SubscriptionCenter.tsx
- */
 export interface SubscriptionPlan {
   id: string;
   name: string;

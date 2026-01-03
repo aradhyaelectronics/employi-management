@@ -18,7 +18,7 @@ const getInitialState = (): AppState => {
         projects: parsed.projects || [],
         tasks: parsed.tasks || [],
         leaves: parsed.leaves || [],
-        version: '2.7.0-complete-logic'
+        version: '2.8.0-hierarchy-fix'
       };
     }
   } catch (e) {}
@@ -28,7 +28,7 @@ const getInitialState = (): AppState => {
       { id: 'p-free', name: 'Standard (Free)', price: 0, durationDays: 365, userLimit: 5, features: ['Basic Attendance', 'Work Logs', 'Manual Payroll'] },
       { id: 'p-pro', name: 'Enterprise Pro', price: 4999, durationDays: 30, userLimit: 50, features: ['Advanced Payroll', 'Geofencing', 'Task Management', 'Leave Portal', 'AI Audits'] }
     ],
-    salarySlips: [], version: '2.7.0-complete-logic'
+    salarySlips: [], version: '2.8.0-hierarchy-fix'
   };
 };
 
@@ -73,27 +73,36 @@ export const useStore = () => {
     updateLeaveStatus: async (id: string, status: RequestStatus) => {
       updateState(p => ({ ...p, leaves: p.leaves.map(l => l.id === id ? { ...l, status } : l) }));
     },
-    markAttendance: async (uid: string, cid: string, type: 'IN' | 'OUT', coords?: any, ot?: number) => {
-      const today = new Date().toISOString().split('T')[0];
-      const time = new Date().toLocaleTimeString();
+    markAttendance: async (uid: string, cid: string, type: 'IN' | 'OUT', coords?: any, ot?: number, manualDate?: string, manualTime?: string) => {
+      const date = manualDate || new Date().toISOString().split('T')[0];
+      const time = manualTime || new Date().toLocaleTimeString();
       
       const onLeave = state.leaves.some(l => 
         l.userId === uid && 
         l.status === RequestStatus.APPROVED && 
-        today >= l.fromDate && today <= l.toDate
+        date >= l.fromDate && date <= l.toDate
       );
-      if (onLeave && type === 'IN') throw new Error("Attendance blocked: User is on approved leave for today.");
+      if (onLeave && type === 'IN' && !manualDate) throw new Error("Attendance blocked: User is on approved leave.");
 
       updateState(p => {
         if (type === 'IN') {
-          return { ...p, attendance: [...p.attendance, { id: `a-${Date.now()}`, userId: uid, companyId: cid, date: today, checkIn: time, ...coords }] };
+          return { ...p, attendance: [...p.attendance, { id: `a-${Date.now()}`, userId: uid, companyId: cid, date: date, checkIn: time, ...coords }] };
         } else {
-          return { ...p, attendance: p.attendance.map(a => (a.userId === uid && a.date === today && !a.checkOut) ? { ...a, checkOut: time, overtimeHours: ot } : a) };
+          return { ...p, attendance: p.attendance.map(a => (a.userId === uid && a.date === date && !a.checkOut) ? { ...a, checkOut: time, overtimeHours: ot } : a) };
         }
       });
     },
     addWorkLog: async (log: any) => updateState(p => ({ ...p, workLogs: [...p.workLogs, { ...log, id: `w-${Date.now()}` }] })),
     updateUserPin: async (id: string, pin: string) => updateState(p => ({ ...p, users: p.users.map(u => u.id === id ? { ...u, pin } : u) })),
+    updateUserPassword: async (id: string, password: string) => {
+      updateState(p => ({ ...p, users: p.users.map(u => u.id === id ? { ...u, password } : u) }));
+    },
+    updateUserSalary: async (id: string, salaryAmount: number, salaryType: SalaryType, overtimeRate: number) => {
+      updateState(p => ({
+        ...p,
+        users: p.users.map(u => u.id === id ? { ...u, salaryAmount, salaryType, overtimeRate } : u)
+      }));
+    },
     addFinancialRequest: async (req: any) => updateState(p => ({ ...p, requests: [...p.requests, { ...req, id: `r-${Date.now()}` }] })),
     updateRequestStatus: async (id: string, status: RequestStatus) => updateState(p => ({ ...p, requests: p.requests.map(r => r.id === id ? { ...r, status } : r) })),
     addSite: async (s: any) => updateState(p => ({ ...p, sites: [...p.sites, { ...s, id: `s-${Date.now()}` }] })),

@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { User, AppState, UserRole } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { GoogleGenAI } from "@google/genai";
@@ -7,21 +7,73 @@ import { GoogleGenAI } from "@google/genai";
 interface Props {
   user: User;
   state: AppState;
+  updatePassword?: (id: string, password: string) => Promise<void>;
 }
 
-const Dashboard: React.FC<Props> = ({ user, state }) => {
+const Dashboard: React.FC<Props> = ({ user, state, updatePassword }) => {
   const isSuper = user.role === UserRole.SUPER_ADMIN;
   const isAdmin = user.role === UserRole.ADMIN;
+  const isSupervisor = user.role === UserRole.SUPERVISOR;
   const company = state.companies.find(c => c.id === user.companyId);
-  const activePlan = state.subscriptionPlans.find(p => p.id === company?.subscriptionPlanId);
   
   const [aiReport, setAiReport] = useState<string | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
+
+  // Password change state
+  const [passData, setPassData] = useState({ current: '', new: '', confirm: '' });
+  const [passChangeSuccess, setPassChangeSuccess] = useState(false);
+  const [passChangeError, setPassChangeError] = useState('');
   
-  const relevantWorkLogs = isSuper ? state.workLogs : state.workLogs.filter(l => l.companyId === user.companyId);
-  const relevantUsers = isSuper ? state.users : state.users.filter(u => u.companyId === user.companyId);
-  const relevantRequests = isSuper ? state.requests : state.requests.filter(r => r.companyId === user.companyId);
+  const relevantWorkLogs = useMemo(() => isSuper ? state.workLogs : state.workLogs.filter(l => l.companyId === user.companyId), [state.workLogs, user.companyId, isSuper]);
+  const relevantUsers = useMemo(() => isSuper ? state.users : state.users.filter(u => u.companyId === user.companyId), [state.users, user.companyId, isSuper]);
+  const relevantRequests = useMemo(() => isSuper ? state.requests : state.requests.filter(r => r.companyId === user.companyId), [state.requests, user.companyId, isSuper]);
   
+  const supervisors = useMemo(() => relevantUsers.filter(u => u.role === UserRole.SUPERVISOR), [relevantUsers]);
+
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPassChangeError('');
+    setPassChangeSuccess(false);
+
+    if (passData.current !== user.password) {
+      setPassChangeError('The current password entered is incorrect.');
+      return;
+    }
+    if (passData.new.length < 6) {
+      setPassChangeError('New password must be at least 6 characters.');
+      return;
+    }
+    if (passData.new !== passData.confirm) {
+      setPassChangeError('New password and confirmation do not match.');
+      return;
+    }
+
+    try {
+      if (updatePassword) {
+        await updatePassword(user.id, passData.new);
+        setPassChangeSuccess(true);
+        setPassData({ current: '', new: '', confirm: '' });
+        alert("Security Credentials Updated Successfully!");
+      }
+    } catch (err) {
+      setPassChangeError('System failed to update credentials.');
+    }
+  };
+
+  const supervisorMetrics = useMemo(() => {
+    return supervisors.map(sup => {
+      const myTeam = relevantUsers.filter(u => u.supervisorId === sup.id);
+      const teamLogs = relevantWorkLogs.filter(log => myTeam.some(tm => tm.id === log.userId));
+      const totalMeters = teamLogs.reduce((sum, l) => sum + l.meters, 0);
+      return {
+        id: sup.id,
+        name: sup.name,
+        teamSize: myTeam.length,
+        output: totalMeters
+      };
+    });
+  }, [supervisors, relevantUsers, relevantWorkLogs]);
+
   const workSummary = relevantWorkLogs.reduce((acc: any, log) => {
     const existing = acc.find((a: any) => a.name === log.cableType);
     if (existing) existing.value += log.meters;
@@ -40,13 +92,14 @@ const Dashboard: React.FC<Props> = ({ user, state }) => {
       Analyze this system data:
       Enterprise: ${company?.name || 'Multi-Tenant System'}
       Total Workforce: ${relevantUsers.length}
-      Recent Logs: ${JSON.stringify(relevantWorkLogs.slice(-10))}
+      Supervisors Reporting to Admin: ${supervisors.length}
+      Supervisor Metrics: ${JSON.stringify(supervisorMetrics)}
       
       Provide a concise 3-point report:
-      1. Productivity Score (0-100) based on cable logs vs workforce size.
-      2. Operational Flag (Is someone punching in without GPS?)
-      3. Project Risk (Are there tasks nearing deadline with 0 progress?)
-      Keep it professional, data-driven, and brief.`;
+      1. Overall Productivity Score (0-100).
+      2. Managerial Efficiency (Which supervisor's team is most active?)
+      3. Project Risk (Are there bottlenecks in the hierarchy?)
+      Keep it professional and data-driven.`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
@@ -63,26 +116,10 @@ const Dashboard: React.FC<Props> = ({ user, state }) => {
   };
 
   const stats = [
-    { 
-      label: isSuper ? 'Total Enterprises' : 'Total Workforce', 
-      value: isSuper ? state.companies.length : relevantUsers.length, 
-      color: isSuper ? 'text-purple-600' : 'text-blue-600' 
-    },
-    { 
-      label: isSuper ? 'Global Cable (m)' : 'Cable Laid (m)', 
-      value: relevantWorkLogs.reduce((sum, l) => sum + l.meters, 0), 
-      color: 'text-green-600' 
-    },
-    { 
-      label: 'Pending Requests', 
-      value: relevantRequests.filter(r => r.status === 'PENDING').length, 
-      color: 'text-orange-600' 
-    },
-    { 
-      label: isSuper ? 'Global Logs' : 'Work Logs', 
-      value: relevantWorkLogs.length, 
-      color: 'text-purple-600' 
-    },
+    { label: isSuper ? 'Enterprises' : 'Workforce', value: isSuper ? state.companies.length : relevantUsers.length, color: 'text-blue-600' },
+    { label: 'Cable Laid (m)', value: relevantWorkLogs.reduce((sum, l) => sum + l.meters, 0), color: 'text-green-600' },
+    { label: 'Pending Auth', value: relevantRequests.filter(r => r.status === 'PENDING').length, color: 'text-orange-600' },
+    { label: 'Supervisors', value: supervisors.length, color: 'text-purple-600' },
   ];
 
   return (
@@ -96,75 +133,144 @@ const Dashboard: React.FC<Props> = ({ user, state }) => {
             </div>
           ))}
         </div>
-        {!isSuper && activePlan && (
-           <div className="bg-blue-600 text-white px-6 py-4 rounded-3xl shadow-xl shadow-blue-100 flex items-center space-x-4">
-              <div className="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center">
-                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M15.59 14.37a6 6 0 01-5.84 7.38v-4.8m5.84-2.58a14.98 14.98 0 006.16-12.12A14.98 14.98 0 009.63 8.41m5.96 5.96a14.926 14.926 0 01-5.84 1.2l-3.1-3.1a14.926 14.926 0 011.2-5.84m5.74 7.74l3.5 3.5m-7.24-7.24L5.5 5.5" /></svg>
-              </div>
-              <div>
-                <p className="text-[8px] font-black uppercase tracking-widest opacity-60">Active Tier</p>
-                <p className="text-xs font-black uppercase tracking-tighter">{activePlan.name}</p>
-              </div>
-           </div>
-        )}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-slate-900 rounded-[2rem] p-8 shadow-2xl relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-purple-600/10 blur-[100px] rounded-full"></div>
-          <div className="relative z-10">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-               <div>
-                  <h3 className="text-xl font-black text-white uppercase tracking-tight">Intelligence Audit</h3>
-                  <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">AI Data Correlation Engine</p>
-               </div>
-               <button 
-                onClick={runAiAudit}
-                disabled={isAiLoading}
-                className={`px-8 py-3 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] transition-all flex items-center space-x-2 ${isAiLoading ? 'bg-slate-800 text-slate-500' : 'bg-purple-600 text-white hover:bg-purple-500 shadow-xl'}`}
-               >
-                 {isAiLoading ? 'Analyzing...' : 'Execute Audit'}
-               </button>
-            </div>
-
-            {aiReport ? (
-              <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6 animate-in fade-in duration-500">
-                <p className="text-slate-300 text-sm font-medium leading-relaxed whitespace-pre-wrap">{aiReport}</p>
-              </div>
-            ) : (
-              <div className="border-2 border-dashed border-slate-700 rounded-2xl py-12 text-center">
-                 <p className="text-slate-500 font-black text-[10px] uppercase tracking-widest">Awaiting Command...</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100">
-           <h3 className="text-lg font-black text-blue-900 uppercase tracking-tighter mb-6">System Health</h3>
-           <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl">
-                 <p className="text-[10px] font-black uppercase text-gray-400">Geofence Nodes</p>
-                 <span className={`text-[10px] font-black uppercase ${state.sites.filter(s => s.companyId === user.companyId).length > 0 ? 'text-green-600' : 'text-red-500'}`}>
-                    {state.sites.filter(s => s.companyId === user.companyId).length > 0 ? 'ACTIVE' : 'DISABLED'}
-                 </span>
-              </div>
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl">
-                 <p className="text-[10px] font-black uppercase text-gray-400">Payroll Run</p>
-                 <span className="text-[10px] font-black uppercase text-blue-600">MONTHLY</span>
-              </div>
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl">
-                 <p className="text-[10px] font-black uppercase text-gray-400">Database Engine</p>
-                 <span className="text-[10px] font-black uppercase text-gray-800">SYNCED</span>
-              </div>
-           </div>
-        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100 min-w-0">
-          <h3 className={`text-lg font-black uppercase tracking-tighter mb-6 ${isSuper ? 'text-purple-900' : 'text-blue-900'}`}>
-            Progress Analysis
-          </h3>
+        {/* User Profile & Security Settings Card */}
+        <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100">
+           <div className="flex justify-between items-center mb-8">
+              <div>
+                 <h3 className="text-lg font-black text-blue-900 uppercase tracking-tighter">Security & Profile</h3>
+                 <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Manage Your Access Credentials</p>
+              </div>
+              <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600">
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+              </div>
+           </div>
+
+           <form onSubmit={handlePasswordChange} className="space-y-4">
+              <div>
+                 <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Current Password</label>
+                 <input 
+                  type="password" 
+                  className="w-full px-5 py-3 bg-gray-50 border border-gray-100 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500/10" 
+                  value={passData.current} 
+                  onChange={e => setPassData({...passData, current: e.target.value})} 
+                  required 
+                 />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                 <div>
+                    <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">New Password</label>
+                    <input 
+                      type="password" 
+                      className="w-full px-5 py-3 bg-gray-50 border border-gray-100 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500/10" 
+                      value={passData.new} 
+                      onChange={e => setPassData({...passData, new: e.target.value})} 
+                      required 
+                    />
+                 </div>
+                 <div>
+                    <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Confirm New Password</label>
+                    <input 
+                      type="password" 
+                      className="w-full px-5 py-3 bg-gray-50 border border-gray-100 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500/10" 
+                      value={passData.confirm} 
+                      onChange={e => setPassData({...passData, confirm: e.target.value})} 
+                      required 
+                    />
+                 </div>
+              </div>
+
+              {passChangeError && <p className="text-[10px] text-red-500 font-bold uppercase tracking-tight">{passChangeError}</p>}
+              {passChangeSuccess && <p className="text-[10px] text-green-600 font-bold uppercase tracking-tight">Password updated successfully.</p>}
+
+              <button 
+                type="submit" 
+                className="w-full bg-blue-900 text-white py-4 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-xl shadow-blue-100 hover:bg-black transition-all active:scale-[0.98]"
+              >
+                Update My Password
+              </button>
+           </form>
+
+           <div className="mt-8 pt-8 border-t border-gray-50 flex items-center justify-between">
+              <div>
+                 <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Logged in as</p>
+                 <p className="text-sm font-black text-gray-800 uppercase leading-none mt-1">{user.name}</p>
+                 <p className="text-[9px] font-bold text-blue-500 uppercase tracking-tight mt-1">{user.role}</p>
+              </div>
+              <div className="text-right">
+                 <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest">System Access</p>
+                 <p className="text-sm font-black text-green-600 uppercase leading-none mt-1">Verified Device</p>
+              </div>
+           </div>
+        </div>
+
+        {/* Live Feed / Activity */}
+        <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden min-w-0">
+          <h3 className="text-lg font-black uppercase tracking-tighter mb-6 text-blue-900">Live Operation Feed</h3>
+          <div className="space-y-4">
+            {relevantWorkLogs.slice(-5).reverse().map((log, idx) => {
+              const u = state.users.find(u => u.id === log.userId);
+              return (
+                <div key={idx} className="flex items-center space-x-4 p-4 hover:bg-gray-50 rounded-2xl transition group border-l-4 border-transparent hover:border-blue-500">
+                  <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center font-black text-xs uppercase">{u?.name.charAt(0)}</div>
+                  <div className="flex-1 overflow-hidden">
+                    <p className="text-xs font-black text-gray-800 truncate">{u?.name} deployed {log.meters}m</p>
+                    <p className="text-[8px] text-gray-400 font-bold uppercase tracking-widest">{log.installationDate} • {log.cableType}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {isAdmin && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden">
+             <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h3 className="text-lg font-black text-blue-900 uppercase tracking-tighter">Middle Management Performance</h3>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Supervisors reporting to you</p>
+                </div>
+             </div>
+             <div className="space-y-4">
+                {supervisorMetrics.map(sup => (
+                  <div key={sup.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                    <div>
+                      <p className="text-xs font-black text-gray-800 uppercase">{sup.name}</p>
+                      <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Manages: {sup.teamSize} Personnel</p>
+                    </div>
+                    <div className="text-right">
+                       <p className="text-sm font-black text-blue-600">{sup.output.toLocaleString()}m</p>
+                       <p className="text-[8px] text-gray-400 font-bold uppercase tracking-widest">Team Total</p>
+                    </div>
+                  </div>
+                ))}
+                {supervisors.length === 0 && <p className="text-center py-6 text-gray-300 font-black uppercase text-[10px] italic">No Supervisors Enrolled</p>}
+             </div>
+          </div>
+          
+          <div className="bg-slate-900 rounded-[2rem] p-8 shadow-2xl relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-purple-600/10 blur-[100px] rounded-full"></div>
+            <div className="relative z-10">
+              <div className="flex justify-between items-center mb-8">
+                 <h3 className="text-xl font-black text-white uppercase tracking-tight">Intelligence Audit</h3>
+                 <button onClick={runAiAudit} disabled={isAiLoading} className={`px-6 py-2 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all ${isAiLoading ? 'bg-slate-800 text-slate-500' : 'bg-purple-600 text-white hover:bg-purple-500 shadow-xl'}`}>{isAiLoading ? 'Analysing...' : 'Execute'}</button>
+              </div>
+              {aiReport ? (
+                <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6"><p className="text-slate-300 text-xs font-medium leading-relaxed whitespace-pre-wrap">{aiReport}</p></div>
+              ) : (
+                <div className="border-2 border-dashed border-slate-700 rounded-2xl py-12 text-center"><p className="text-slate-500 font-black text-[10px] uppercase tracking-widest">Awaiting Command...</p></div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100 min-w-0">
+          <h3 className="text-lg font-black uppercase tracking-tighter mb-6 text-blue-900">Output Analysis</h3>
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%" debounce={100}>
               <BarChart data={workSummary}>
@@ -180,27 +286,6 @@ const Dashboard: React.FC<Props> = ({ user, state }) => {
               </BarChart>
             </ResponsiveContainer>
           </div>
-        </div>
-
-        <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden min-w-0">
-          <h3 className="text-lg font-black uppercase tracking-tighter mb-6 text-blue-900">Live Operation Feed</h3>
-          <div className="space-y-4">
-            {relevantWorkLogs.slice(-5).reverse().map((log, idx) => {
-              const u = state.users.find(u => u.id === log.userId);
-              return (
-                <div key={idx} className="flex items-center space-x-4 p-4 hover:bg-gray-50 rounded-2xl transition group">
-                  <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center font-black text-xs">
-                    {u?.name.charAt(0)}
-                  </div>
-                  <div className="flex-1 overflow-hidden">
-                    <p className="text-xs font-black text-gray-800 truncate">{u?.name} deployed {log.meters}m</p>
-                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">{log.installationDate}</p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
       </div>
     </div>
   );
