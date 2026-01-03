@@ -32,9 +32,11 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
   const [filterEmployee, setFilterEmployee] = useState('');
   const [filterSupervisor, setFilterSupervisor] = useState('');
   const [filterCableType, setFilterCableType] = useState('');
+  const [filterSite, setFilterSite] = useState('');
   
   const [logData, setLogData] = useState({
     installationDate: new Date().toISOString().split('T')[0],
+    siteId: '',
     cableType: CableType.CAT6,
     cableSize: '4 Pair',
     meters: 0,
@@ -42,7 +44,10 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
     taskId: ''
   });
 
-  // LOGIC: Filter tasks assigned to this user
+  // Get sites for the current company
+  const companySites = useMemo(() => state.sites.filter(s => s.companyId === user.companyId), [state.sites, user.companyId]);
+  
+  // Filter tasks assigned to this user
   const assignedTasks = state.tasks.filter(t => t.assignedTo === user.id);
 
   useEffect(() => {
@@ -60,6 +65,7 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    if (!logData.siteId) return alert('Please select a Work Site.');
     if (logData.meters <= 0) return alert('Meters must be greater than 0');
     if (!logData.installationDate) return alert('Please select the date of installation');
     
@@ -70,6 +76,7 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
       await addWorkLog({
         userId: user.id,
         companyId: user.companyId,
+        siteId: logData.siteId,
         date: new Date().toISOString().split('T')[0],
         installationDate: logData.installationDate,
         cableType: logData.cableType,
@@ -81,6 +88,7 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
       
       setLogData({ 
         installationDate: new Date().toISOString().split('T')[0],
+        siteId: '',
         cableType: CableType.CAT6,
         cableSize: '4 Pair',
         meters: 0, 
@@ -142,18 +150,23 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
 
       const isEmployeeMatch = filterEmployee ? log.userId === filterEmployee : true;
       const isCableMatch = filterCableType ? log.cableType === filterCableType : true;
+      const isSiteMatch = filterSite ? log.siteId === filterSite : true;
 
       const searchLower = searchQuery.toLowerCase();
       const empName = logUser?.name.toLowerCase() || '';
+      const siteObj = companySites.find(s => s.id === log.siteId);
+      const siteName = siteObj?.name.toLowerCase() || '';
+      
       const isSearchMatch = searchQuery 
         ? (log.description.toLowerCase().includes(searchLower) || 
            empName.includes(searchLower) || 
+           siteName.includes(searchLower) ||
            log.cableSize.toLowerCase().includes(searchLower))
         : true;
 
-      return isAfterStart && isBeforeEnd && isSupervisorMatch && isEmployeeMatch && isCableMatch && isSearchMatch;
+      return isAfterStart && isBeforeEnd && isSupervisorMatch && isEmployeeMatch && isCableMatch && isSiteMatch && isSearchMatch;
     });
-  }, [state.workLogs, user, startDate, endDate, filterSupervisor, filterEmployee, filterCableType, searchQuery, state.users]);
+  }, [state.workLogs, user, startDate, endDate, filterSupervisor, filterEmployee, filterCableType, filterSite, searchQuery, state.users, companySites]);
 
   const totalMeters = useMemo(() => filteredLogs.reduce((sum, l) => sum + l.meters, 0), [filteredLogs]);
 
@@ -171,14 +184,16 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
     setFilterEmployee('');
     setFilterSupervisor('');
     setFilterCableType('');
+    setFilterSite('');
   };
 
   const exportToCSV = () => {
     if (filteredLogs.length === 0) return alert('No data to export');
-    const headers = ['Entry Date', 'Installation Date', 'Employee', 'Cable Type', 'Size', 'Meters', 'Description'];
+    const headers = ['Entry Date', 'Installation Date', 'Site', 'Employee', 'Cable Type', 'Size', 'Meters', 'Description'];
     const rows = filteredLogs.map(log => {
       const emp = state.users.find(u => u.id === log.userId);
-      return [log.date, log.installationDate || log.date, emp?.name || 'Unknown', log.cableType, log.cableSize, log.meters, `"${log.description.replace(/"/g, '""')}"`];
+      const site = companySites.find(s => s.id === log.siteId);
+      return [log.date, log.installationDate || log.date, site?.name || '--', emp?.name || 'Unknown', log.cableType, log.cableSize, log.meters, `"${log.description.replace(/"/g, '""')}"`];
     });
     const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -192,7 +207,7 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
     document.body.removeChild(link);
   };
 
-  const hasActiveFilters = startDate || endDate || searchQuery || filterEmployee || filterSupervisor || filterCableType;
+  const hasActiveFilters = startDate || endDate || searchQuery || filterEmployee || filterSupervisor || filterCableType || filterSite;
   const remainingChars = MAX_DESC_LIMIT - logData.description.length;
 
   return (
@@ -207,6 +222,14 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
             <div>
               <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Installation Date</label>
               <input type="date" required className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-bold text-gray-700" value={logData.installationDate} onChange={e => setLogData({ ...logData, installationDate: e.target.value })} />
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-black text-orange-600 uppercase tracking-widest mb-1.5 ml-1">Assigned Work Site</label>
+              <select required className="w-full px-4 py-2.5 bg-orange-50 border border-orange-100 rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all font-black text-orange-900" value={logData.siteId} onChange={e => setLogData({ ...logData, siteId: e.target.value })}>
+                <option value="">Choose Site Location...</option>
+                {companySites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
             </div>
 
             {assignedTasks.length > 0 && (
@@ -268,7 +291,7 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="relative flex-1">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg></span>
-                <input type="text" placeholder="Search description, employee, or specifications..." className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all placeholder:text-gray-300 font-medium" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                <input type="text" placeholder="Search description, employee, site or specifications..." className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all placeholder:text-gray-300 font-medium" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
               </div>
               <div className="flex items-center space-x-2 shrink-0">
                  <button onClick={() => setPreset(0)} className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${startDate === new Date().toISOString().split('T')[0] ? 'bg-blue-600 text-white shadow-lg shadow-blue-100' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}>Today</button>
@@ -282,7 +305,7 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
                  <button onClick={exportToCSV} className="flex items-center space-x-2 px-5 py-2.5 bg-orange-50 text-orange-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-orange-100 transition-all border border-orange-100"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg><span>Export CSV</span></button>
               </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
               <div><label className="block text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 ml-1">Range From</label><input type="date" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-xs font-bold text-gray-600 focus:ring-2 focus:ring-blue-500/10 outline-none" value={startDate} onChange={(e) => setStartDate(e.target.value)} /></div>
               <div><label className="block text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 ml-1">Range To</label><input type="date" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-xs font-bold text-gray-600 focus:ring-2 focus:ring-blue-500/10 outline-none" value={endDate} onChange={(e) => setEndDate(e.target.value)} /></div>
               
@@ -310,6 +333,7 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
                 </>
               )}
               
+              <div><label className="block text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 ml-1">Work Site</label><select className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-xs font-bold text-gray-600 focus:ring-2 focus:ring-blue-500/10 outline-none" value={filterSite} onChange={(e) => setFilterSite(e.target.value)}><option value="">All Sites</option>{companySites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
               <div><label className="block text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 ml-1">Cable Type</label><select className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-xs font-bold text-gray-600 focus:ring-2 focus:ring-blue-500/10 outline-none" value={filterCableType} onChange={(e) => setFilterCableType(e.target.value)}><option value="">All Cables</option>{Object.values(CableType).map(ct => <option key={ct} value={ct}>{ct}</option>)}</select></div>
             </div>
             {hasActiveFilters && (
@@ -328,25 +352,29 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
           <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead className="bg-gray-50/50">
-                <tr><th className="px-8 py-5 text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">Personnel & Entry</th><th className="px-8 py-5 text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">Installation Date</th><th className="px-8 py-5 text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">Technical Specification</th><th className="px-8 py-5 text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] text-center">Progress</th><th className="px-8 py-5 text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] text-center">Verification</th></tr>
+                <tr><th className="px-8 py-5 text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">Personnel & Site</th><th className="px-8 py-5 text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">Installation Date</th><th className="px-8 py-5 text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">Technical Specification</th><th className="px-8 py-5 text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] text-center">Progress</th><th className="px-8 py-5 text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] text-center">Verification</th></tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {filteredLogs.slice().reverse().map((log, i) => {
                   const emp = state.users.find(u => u.id === log.userId);
                   const supervisor = state.users.find(u => u.id === emp?.supervisorId);
                   const linkedTask = state.tasks.find(t => t.id === log.taskId);
+                  const site = companySites.find(s => s.id === log.siteId);
 
                   return (
                     <tr key={log.id || i} className="hover:bg-gray-50/50 transition-all group">
                       <td className="px-8 py-6">
                         <div className="font-black text-gray-800 uppercase text-xs tracking-tight">{emp?.name || 'Unknown'}</div>
+                        <div className="flex items-center space-x-1.5 mt-1">
+                          <span className="w-2 h-2 bg-orange-500 rounded-full"></span>
+                          <span className="text-[9px] font-black text-orange-600 uppercase tracking-widest">{site?.name || 'Unassigned Site'}</span>
+                        </div>
                         {supervisor && (
                           <div className="flex items-center space-x-1.5 mt-0.5">
                             <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>
                             <div className="text-[8px] font-black text-blue-500 uppercase tracking-widest">Team {supervisor.name}</div>
                           </div>
                         )}
-                        <div className="text-[9px] text-gray-300 font-bold uppercase tracking-widest mt-0.5">Logged: {log.date}</div>
                       </td>
                       <td className="px-8 py-6"><div className="text-sm font-black text-blue-900 tracking-tighter bg-blue-50/50 px-3 py-1.5 rounded-xl inline-block border border-blue-100/50">{log.installationDate || log.date}</div></td>
                       <td className="px-8 py-6">

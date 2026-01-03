@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { 
-  AppState, User, Company, UserRole, RequestStatus, 
+  AppState, User, Company, UserRole, UserStatus, RequestStatus, 
   WorkLog, FinancialRequest, MonthlySalarySlip, 
   PaymentStatus, Project, Task, LeaveRequest, SalaryType, SubscriptionPlan 
 } from './types';
@@ -18,7 +18,7 @@ const getInitialState = (): AppState => {
         projects: parsed.projects || [],
         tasks: parsed.tasks || [],
         leaves: parsed.leaves || [],
-        version: '2.8.0-hierarchy-fix'
+        version: '3.0.0-auth-verify'
       };
     }
   } catch (e) {}
@@ -28,7 +28,7 @@ const getInitialState = (): AppState => {
       { id: 'p-free', name: 'Standard (Free)', price: 0, durationDays: 365, userLimit: 5, features: ['Basic Attendance', 'Work Logs', 'Manual Payroll'] },
       { id: 'p-pro', name: 'Enterprise Pro', price: 4999, durationDays: 30, userLimit: 50, features: ['Advanced Payroll', 'Geofencing', 'Task Management', 'Leave Portal', 'AI Audits'] }
     ],
-    salarySlips: [], version: '2.8.0-hierarchy-fix'
+    salarySlips: [], version: '3.0.0-auth-verify'
   };
 };
 
@@ -48,9 +48,19 @@ export const useStore = () => {
   return {
     state,
     addUser: async (u: any) => {
-      const newUser = { ...u, id: `u-${Date.now()}` };
+      const newUser = { 
+        status: UserStatus.PENDING, // Default to pending for manual adds
+        ...u, 
+        id: `u-${Date.now()}` 
+      };
       updateState(p => ({ ...p, users: [...p.users, newUser] }));
       return newUser;
+    },
+    updateUser: async (id: string, updates: Partial<User>) => {
+      updateState(p => ({
+        ...p,
+        users: p.users.map(u => u.id === id ? { ...u, ...updates } : u)
+      }));
     },
     addCompany: async (name: string) => {
       const c = { id: `c-${Date.now()}`, name, createdAt: new Date().toISOString(), subscriptionPlanId: 'p-free' };

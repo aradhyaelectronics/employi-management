@@ -6,6 +6,12 @@ export enum UserRole {
   EMPLOYEE = 'EMPLOYEE'
 }
 
+export enum UserStatus {
+  ACTIVE = 'ACTIVE',
+  PENDING = 'PENDING',
+  BLOCKED = 'BLOCKED'
+}
+
 export enum SalaryType {
   MONTHLY_FIXED = 'MONTHLY_FIXED',
   DAILY_WAGE = 'DAILY_WAGE'
@@ -73,6 +79,7 @@ export interface User {
   email: string;
   mobile?: string;
   role: UserRole;
+  status: UserStatus;
   companyId: string;
   password?: string;
   pin?: string;
@@ -114,6 +121,7 @@ export interface WorkLog {
   id: string;
   userId: string;
   companyId: string;
+  siteId?: string; // Linked to physical site
   date: string;
   installationDate: string;
   taskId?: string; // Linked to formal tasks

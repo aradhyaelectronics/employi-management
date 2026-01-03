@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { UserRole, User, RequestStatus, CableType, PaymentStatus } from './types';
+import { UserRole, UserStatus, User, RequestStatus, CableType, PaymentStatus } from './types';
 import { useStore } from './store';
 import { ICONS, COLORS, Logo } from './constants';
 import Dashboard from './components/Dashboard';
@@ -22,6 +22,7 @@ const App: React.FC = () => {
   const { 
     state, 
     addUser, 
+    updateUser,
     updateUserPin,
     updateUserPassword,
     updateUserSalary,
@@ -73,20 +74,55 @@ const App: React.FC = () => {
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
+    const identifier = formData.email.toLowerCase().trim();
+    const pass = formData.password;
+
     if (isLogin) {
-      const user = state.users.find(u => u.email.toLowerCase() === formData.email.toLowerCase().trim() && u.password === formData.password);
+      const user = state.users.find(u => 
+        (u.email.toLowerCase() === identifier || (u.mobile && u.mobile.trim() === identifier)) && 
+        u.password === pass
+      );
+
       if (user) {
-        if (isSystemLogin && user.role !== UserRole.SUPER_ADMIN) { alert('Not a System Admin account.'); return; }
+        if (user.status === UserStatus.PENDING) {
+          alert('Verification Pending: Your account is awaiting Admin approval.');
+          return;
+        }
+        if (user.status === UserStatus.BLOCKED) {
+          alert('Access Denied: Your account has been suspended.');
+          return;
+        }
+        if (isSystemLogin && user.role !== UserRole.SUPER_ADMIN) { 
+          alert('Access Denied: Not a System Admin account.'); 
+          return; 
+        }
         setCurrentUser(user);
         setFormData({ name: '', email: '', password: '', companyName: '' });
-      } else { alert('Invalid credentials.'); }
+      } else { 
+        alert('Invalid credentials. Please check your Email/Mobile and Password.'); 
+      }
     } else {
+      // Signup: Admins/Super Admins are ACTIVE by default to allow first setup
       if (isSystemLogin) {
-        const superAdmin = await addUser({ name: formData.name, email: formData.email, password: formData.password, role: UserRole.SUPER_ADMIN, companyId: 'SYSTEM' });
+        const superAdmin = await addUser({ 
+          name: formData.name, 
+          email: identifier, 
+          password: pass, 
+          role: UserRole.SUPER_ADMIN, 
+          companyId: 'SYSTEM',
+          status: UserStatus.ACTIVE 
+        });
         setCurrentUser(superAdmin);
       } else {
         const company = await addCompany(formData.companyName);
-        const admin = await addUser({ name: formData.name, email: formData.email, password: formData.password, role: UserRole.ADMIN, companyId: company.id });
+        const admin = await addUser({ 
+          name: formData.name, 
+          email: identifier, 
+          password: pass, 
+          role: UserRole.ADMIN, 
+          companyId: company.id,
+          status: UserStatus.ACTIVE 
+        });
         setCurrentUser(admin);
       }
     }
@@ -132,9 +168,23 @@ const App: React.FC = () => {
               <input type="text" placeholder="Full Name" className="w-full px-5 py-3.5 bg-gray-50 rounded-2xl border" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
             </>
           )}
-          <input type="email" placeholder="Email" className="w-full px-5 py-3.5 bg-gray-50 rounded-2xl border" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} />
-          <input type="password" placeholder="Password" className="w-full px-5 py-3.5 bg-gray-50 rounded-2xl border" value={formData.password} onChange={e => setFormData({ ...formData, password: e.target.value })} />
-          <button type="submit" className={`w-full py-4 text-white rounded-[1.2rem] font-black uppercase text-[10px] ${isSystemLogin ? 'bg-slate-800' : 'bg-orange-600'}`}>
+          <input 
+            type="text" 
+            placeholder="Email or Mobile Number" 
+            className="w-full px-5 py-3.5 bg-gray-50 rounded-2xl border font-medium outline-none focus:ring-2 focus:ring-blue-500/10" 
+            value={formData.email} 
+            onChange={e => setFormData({ ...formData, email: e.target.value })} 
+            required
+          />
+          <input 
+            type="password" 
+            placeholder="Password" 
+            className="w-full px-5 py-3.5 bg-gray-50 rounded-2xl border font-medium outline-none focus:ring-2 focus:ring-blue-500/10" 
+            value={formData.password} 
+            onChange={e => setFormData({ ...formData, password: e.target.value })} 
+            required
+          />
+          <button type="submit" className={`w-full py-4 text-white rounded-[1.2rem] font-black uppercase text-[10px] tracking-widest shadow-xl transition-all active:scale-95 ${isSystemLogin ? 'bg-slate-800' : 'bg-orange-600'}`}>
             {isLogin ? 'Enter Workspace' : 'Initialize Profile'}
           </button>
         </form>
@@ -151,7 +201,6 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-gray-50">
-      {/* Desktop Sidebar */}
       <aside className="hidden md:flex w-72 bg-white border-r flex-col p-8 sticky top-0 h-screen">
         <Logo iconClassName="w-16 h-12" showText={false} />
         <nav className="flex-1 mt-10 space-y-1.5">
@@ -162,9 +211,7 @@ const App: React.FC = () => {
         <button onClick={() => setCurrentUser(null)} className="w-full py-3 bg-red-50 text-red-600 rounded-xl font-black uppercase text-[9px]">Logout</button>
       </aside>
 
-      {/* Main Content Area */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
-        {/* Universal Top Header with Left/Right/Back */}
         <header className="sticky top-0 z-[60] bg-white/80 backdrop-blur-xl border-b border-gray-100 px-6 py-4 flex items-center justify-between">
           <div className="flex items-center space-x-4">
             {activeTab !== 'dashboard' ? (
@@ -211,7 +258,7 @@ const App: React.FC = () => {
             {activeTab === 'leaves' && <LeavePortal user={currentUser} state={state} addLeaveRequest={addLeaveRequest} updateLeaveStatus={updateLeaveStatus} />}
             {activeTab === 'work' && <WorkTracking user={currentUser} state={state} addWorkLog={addWorkLog} />}
             {activeTab === 'financials' && <FinancialManagement user={currentUser} state={state} addRequest={addFinancialRequest} updateStatus={updateRequestStatus} generateMonthlySlips={generateMonthlySlips} updateSalaryStatus={updateSalaryStatus} />}
-            {activeTab === 'users' && <UserManagement user={currentUser} state={state} addUser={addUser} updateUserSalary={updateUserSalary} />}
+            {activeTab === 'users' && <UserManagement user={currentUser} state={state} addUser={addUser} updateUser={updateUser} />}
             {activeTab === 'subscription' && <SubscriptionCenter user={currentUser} state={state} updatePlan={updateSubscriptionPlanConfig} purchasePlan={purchaseSubscription} />}
             {activeTab === 'enterprise' && <CompanyManagement state={state} removeCompany={removeCompany} purchaseSubscription={purchaseSubscription} />}
             {activeTab === 'backend' && <BackendConsole state={state} />}
@@ -219,7 +266,6 @@ const App: React.FC = () => {
         </main>
       </div>
 
-      {/* Mobile Bottom Navigation */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t flex justify-around items-center px-4 py-3 z-[100] shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
         {visibleNavItems.slice(0, 5).map(i => (
           <button key={i.id} onClick={() => setActiveTab(i.id)} className={`flex flex-col items-center justify-center space-y-1 transition-all ${activeTab === i.id ? 'text-blue-700 scale-110' : 'text-gray-300'}`}>

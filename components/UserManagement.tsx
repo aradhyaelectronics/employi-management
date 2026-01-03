@@ -1,15 +1,15 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { User, AppState, UserRole, SalaryType } from '../types';
+import { User, AppState, UserRole, UserStatus, SalaryType } from '../types';
 
 interface Props {
   user: User;
   state: AppState;
   addUser: (u: Omit<User, 'id'>) => Promise<User>;
-  updateUserSalary: (id: string, salaryAmount: number, salaryType: SalaryType, overtimeRate: number) => Promise<void>;
+  updateUser: (id: string, updates: Partial<User>) => Promise<void>;
 }
 
-const UserManagement: React.FC<Props> = ({ user, state, addUser, updateUserSalary }) => {
+const UserManagement: React.FC<Props> = ({ user, state, addUser, updateUser }) => {
   const isSupervisor = user.role === UserRole.SUPERVISOR;
   const isAdmin = user.role === UserRole.ADMIN || user.role === UserRole.SUPER_ADMIN;
 
@@ -17,7 +17,7 @@ const UserManagement: React.FC<Props> = ({ user, state, addUser, updateUserSalar
     name: '', 
     email: '', 
     mobile: '',
-    password: 'PR-' + Math.floor(1000 + Math.random() * 9000), // Random default password
+    password: 'PR-' + Math.floor(1000 + Math.random() * 9000), 
     role: UserRole.EMPLOYEE,
     supervisorId: '',
     salaryType: SalaryType.DAILY_WAGE,
@@ -68,19 +68,43 @@ const UserManagement: React.FC<Props> = ({ user, state, addUser, updateUserSalar
         email: newUser.email.toLowerCase().trim(),
         companyId: user.companyId
       });
-      // Generate a new random password for next entry
       setNewUser({ 
         name: '', email: '', mobile: '', 
         password: 'PR-' + Math.floor(1000 + Math.random() * 9000), 
         role: UserRole.EMPLOYEE, supervisorId: '', salaryType: SalaryType.DAILY_WAGE, salaryAmount: 0, overtimeRate: 0 
       });
-      alert("Success: Personnel enrolled. Please share credentials with them.");
+      alert("Success: Personnel enrolled as PENDING. Please verify them below.");
     } catch (error: any) { alert(error.message); }
+  };
+
+  const handleUpdateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+    try {
+      await updateUser(editingUser.id, {
+        name: editingUser.name,
+        email: editingUser.email.toLowerCase().trim(),
+        mobile: editingUser.mobile,
+        supervisorId: editingUser.supervisorId,
+        salaryType: editingUser.salaryType,
+        salaryAmount: editingUser.salaryAmount,
+        overtimeRate: editingUser.overtimeRate,
+        status: editingUser.status
+      });
+      setEditingUser(null);
+      alert("Success: Personnel profile updated.");
+    } catch (err: any) { alert(err.message); }
+  };
+
+  const handleQuickVerify = async (userId: string) => {
+    if (confirm("Allow this user access to the platform?")) {
+      await updateUser(userId, { status: UserStatus.ACTIVE });
+      alert("User Verified Successfully.");
+    }
   };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-       {/* Enrollment Section - Admin Only */}
        {isAdmin && (
          <div className="lg:col-span-1">
           <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
@@ -166,24 +190,27 @@ const UserManagement: React.FC<Props> = ({ user, state, addUser, updateUserSalar
             <thead>
               <tr className="bg-gray-50">
                 <th className="px-8 py-4 text-[10px] font-bold uppercase text-gray-400 tracking-widest">Personnel</th>
-                <th className="px-8 py-4 text-[10px] font-bold uppercase text-gray-400 tracking-widest">Login Credentials</th>
+                <th className="px-8 py-4 text-[10px] font-bold uppercase text-gray-400 tracking-widest text-center">Verification Status</th>
                 <th className="px-8 py-4 text-[10px] font-bold uppercase text-center text-gray-400 tracking-widest">Role</th>
                 <th className="px-8 py-4 text-[10px] font-bold uppercase text-right text-gray-400 tracking-widest">Manage</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {visibleEmployees.map((u) => {
-                const reportsTo = state.users.find(s => s.id === u.supervisorId);
                 return (
                   <tr key={u.id} className="hover:bg-gray-50/30 transition-colors group">
                     <td className="px-8 py-6">
                       <div className="font-bold text-gray-800 text-sm uppercase tracking-tight">{u.name}</div>
-                      <div className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">{u.email}</div>
+                      <div className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">{u.email} | Mob: {u.mobile || '--'}</div>
                     </td>
-                    <td className="px-8 py-6">
-                      <div className="flex flex-col">
-                        <span className="text-[11px] font-black text-blue-900 uppercase">Mob: {u.mobile || '--'}</span>
-                        <span className="text-[10px] font-bold text-orange-600 uppercase tracking-widest">Pass: {u.password || '******'}</span>
+                    <td className="px-8 py-6 text-center">
+                      <div className="flex flex-col items-center gap-2">
+                        <span className={`px-3 py-1 rounded-xl text-[8px] font-black uppercase border ${u.status === UserStatus.ACTIVE ? 'bg-green-50 text-green-600 border-green-100' : u.status === UserStatus.PENDING ? 'bg-orange-50 text-orange-600 border-orange-100' : 'bg-red-50 text-red-600 border-red-100'}`}>
+                          {u.status}
+                        </span>
+                        {isAdmin && u.status === UserStatus.PENDING && (
+                           <button onClick={() => handleQuickVerify(u.id)} className="text-[8px] font-black text-blue-600 uppercase tracking-widest hover:underline">Verify Now</button>
+                        )}
                       </div>
                     </td>
                     <td className="px-8 py-6 text-center">
@@ -192,7 +219,7 @@ const UserManagement: React.FC<Props> = ({ user, state, addUser, updateUserSalar
                       </span>
                     </td>
                     <td className="px-8 py-6 text-right">
-                      <button onClick={() => setEditingUser(u)} className="text-blue-600 hover:text-blue-800 font-black text-[10px] uppercase tracking-widest transition-colors">Edit Ledger</button>
+                      <button onClick={() => setEditingUser(u)} className="text-blue-600 hover:text-blue-800 font-black text-[10px] uppercase tracking-widest transition-colors">Edit Profile</button>
                     </td>
                   </tr>
                 );
@@ -207,43 +234,92 @@ const UserManagement: React.FC<Props> = ({ user, state, addUser, updateUserSalar
         </div>
       </div>
 
-      {/* Salary & Hierarchy Management Modal */}
       {editingUser && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md p-10 relative overflow-hidden">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300 overflow-y-auto">
+          <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-xl p-10 relative overflow-hidden my-8">
             <div className="absolute top-0 left-0 w-full h-1.5 bg-blue-600"></div>
             <div className="flex justify-between items-center mb-8">
                <div>
-                  <h3 className="text-2xl font-black text-blue-900 tracking-tighter uppercase leading-none">Manage Personnel</h3>
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-2">{editingUser.name}</p>
+                  <h3 className="text-2xl font-black text-blue-900 tracking-tighter uppercase leading-none">Modify Personnel</h3>
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-2">Core Registry Update • ID: {editingUser.id.split('-').pop()}</p>
                </div>
                <button onClick={() => setEditingUser(null)} className="text-gray-300 hover:text-red-500 transition-colors"><svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg></button>
             </div>
             
-            <form onSubmit={async (e) => { e.preventDefault(); await updateUserSalary(editingUser.id, editingUser.salaryAmount || 0, editingUser.salaryType || SalaryType.MONTHLY_FIXED, editingUser.overtimeRate || 0); setEditingUser(null); alert("Personnel ledger updated."); }} className="space-y-6">
-               <div className="grid grid-cols-2 gap-4">
+            <form onSubmit={handleUpdateUser} className="space-y-6">
+               <div className="space-y-4">
+                  <h4 className="text-[9px] font-black text-blue-600 uppercase tracking-[0.3em] border-b pb-1">Identity & Status</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                     <div>
+                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Full Name</label>
+                        <input type="text" className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500/10" value={editingUser.name} onChange={e => setEditingUser({...editingUser, name: e.target.value})} required />
+                     </div>
+                     <div>
+                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Account Status</label>
+                        <select className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl font-black text-sm outline-none" value={editingUser.status} onChange={e => setEditingUser({...editingUser, status: e.target.value as UserStatus})}>
+                          <option value={UserStatus.PENDING}>PENDING (No Access)</option>
+                          <option value={UserStatus.ACTIVE}>ACTIVE (Verified)</option>
+                          <option value={UserStatus.BLOCKED}>BLOCKED (Suspended)</option>
+                        </select>
+                     </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Mobile Number</label>
+                        <input type="tel" className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500/10" value={editingUser.mobile || ''} onChange={e => setEditingUser({...editingUser, mobile: e.target.value})} required />
+                     </div>
+                     <div>
+                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Email Identity</label>
+                        <input type="email" className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500/10" value={editingUser.email} onChange={e => setEditingUser({...editingUser, email: e.target.value})} required />
+                     </div>
+                  </div>
+               </div>
+
+               <div className="space-y-4 pt-4">
+                  <h4 className="text-[9px] font-black text-orange-600 uppercase tracking-[0.3em] border-b pb-1">Hierarchy & Reporting</h4>
                   <div>
-                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Pay Cycle</label>
-                    <select className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl font-bold text-sm outline-none" value={editingUser.salaryType} onChange={e => updateEditingSalary(editingUser.salaryAmount || 0, e.target.value as SalaryType)}>
-                      <option value={SalaryType.DAILY_WAGE}>Daily Wage</option>
-                      <option value={SalaryType.MONTHLY_FIXED}>Monthly Fixed</option>
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Assign to Reporting Manager</label>
+                    <select 
+                      className="w-full px-4 py-3 bg-orange-50 border border-orange-100 text-orange-900 rounded-xl font-bold text-sm outline-none" 
+                      value={editingUser.supervisorId || ''} 
+                      onChange={e => setEditingUser({...editingUser, supervisorId: e.target.value})}
+                    >
+                      <option value="">Direct to Admin</option>
+                      {editingUser.role === UserRole.EMPLOYEE 
+                        ? companySupervisors.map(s => <option key={s.id} value={s.id}>{s.name} (Supervisor)</option>)
+                        : companyAdmins.filter(a => a.id !== editingUser.id).map(a => <option key={a.id} value={a.id}>{a.name} (Admin)</option>)
+                      }
                     </select>
                   </div>
-                  <div>
-                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Salary Amount (₹)</label>
-                    <input type="number" className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl font-black text-sm outline-none" value={editingUser.salaryAmount || ''} onChange={e => updateEditingSalary(parseInt(e.target.value) || 0, editingUser.salaryType || SalaryType.DAILY_WAGE)} />
+               </div>
+
+               <div className="space-y-4 pt-4">
+                  <h4 className="text-[9px] font-black text-green-600 uppercase tracking-[0.3em] border-b pb-1">Compensation Ledger</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Pay Cycle</label>
+                        <select className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl font-bold text-sm outline-none" value={editingUser.salaryType} onChange={e => updateEditingSalary(editingUser.salaryAmount || 0, e.target.value as SalaryType)}>
+                          <option value={SalaryType.DAILY_WAGE}>Daily Wage</option>
+                          <option value={SalaryType.MONTHLY_FIXED}>Monthly Fixed</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Base Amount (₹)</label>
+                        <input type="number" className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl font-black text-sm outline-none" value={editingUser.salaryAmount || ''} onChange={e => updateEditingSalary(parseInt(e.target.value) || 0, editingUser.salaryType || SalaryType.DAILY_WAGE)} />
+                      </div>
+                  </div>
+                  <div className="p-6 bg-blue-900 text-white rounded-[2rem] shadow-xl shadow-blue-100/50">
+                      <div className="flex justify-between items-start mb-1">
+                        <p className="text-[9px] font-black text-blue-300 uppercase tracking-widest">Recalculated OT Rate</p>
+                        <p className="text-[8px] font-bold text-blue-400 uppercase tracking-[0.2em]">Automated (Salary/8)</p>
+                      </div>
+                      <p className="text-3xl font-black">₹{editingUser.overtimeRate} <span className="text-xs text-blue-400 font-bold uppercase">/ Hour</span></p>
                   </div>
                </div>
-               <div className="p-6 bg-blue-900 text-white rounded-[2rem] shadow-xl shadow-blue-100/50">
-                  <div className="flex justify-between items-start mb-1">
-                    <p className="text-[9px] font-black text-blue-300 uppercase tracking-widest">Recalculated OT Rate</p>
-                    <p className="text-[8px] font-bold text-blue-400 uppercase tracking-[0.2em]">Automated (Salary/8)</p>
-                  </div>
-                  <p className="text-3xl font-black">₹{editingUser.overtimeRate} <span className="text-xs text-blue-400 font-bold uppercase">/ Hour</span></p>
-               </div>
-               <div className="flex space-x-3 pt-4">
-                  <button type="submit" className="flex-1 bg-blue-600 text-white py-4 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-xl shadow-blue-200 hover:bg-blue-700 transition-all">Apply Changes</button>
-                  <button type="button" onClick={() => setEditingUser(null)} className="px-6 py-4 bg-gray-100 text-gray-400 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-gray-200 transition-colors">Discard</button>
+
+               <div className="flex space-x-3 pt-6">
+                  <button type="submit" className="flex-1 bg-blue-600 text-white py-4 rounded-xl font-black uppercase text-[11px] tracking-widest shadow-xl shadow-blue-200 hover:bg-blue-700 transition-all">Commit Updates</button>
+                  <button type="button" onClick={() => setEditingUser(null)} className="px-6 py-4 bg-gray-100 text-gray-400 rounded-xl font-black uppercase text-[11px] tracking-widest hover:bg-gray-200 transition-colors">Discard</button>
                </div>
             </form>
           </div>
