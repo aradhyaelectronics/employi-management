@@ -9,7 +9,7 @@ const LegalCompliance: React.FC = () => {
       title: "Our Vision: Empowering Infrastructure",
       subtitle: "The Digitization of Indian Projects",
       body: [
-        "Pragati Enterprises was founded on a singular premise: that the physical building of our world deserves the best digital tools. Our vision is to eliminate the 'information gap' between the site and the office.",
+        "WorkManager was founded on a singular premise: that the physical building of our world deserves the best digital tools. Our vision is to eliminate the 'information gap' between the site and the office.",
         "We aim to be the backbone of cable laying and workforce management across the nation, ensuring every meter of progress is accounted for, every worker is fairly compensated, and every project is completed with absolute transparency.",
         "By leveraging real-time telemetry and geofencing, we are not just tracking work—we are building trust between companies and their most valuable asset: their people."
       ]
@@ -18,20 +18,20 @@ const LegalCompliance: React.FC = () => {
       title: "Privacy Policy",
       subtitle: "Effective Date: October 2023 | Version 1.2",
       body: [
-        "1. Data Collection: Pragati Enterprises collects essential operational data, including real-time Geolocation during punch-in/out, work logs (cable specifications), and financial disbursement requests.",
+        "1. Data Collection: WorkManager collects essential operational data, including real-time Geolocation during punch-in/out, work logs (cable specifications), and financial disbursement requests.",
         "2. Purpose: Location data is used strictly for Geofencing verification to ensure work is performed at authorized project sites. This data is never used for tracking outside of operational hours.",
         "3. Multi-Tenant Isolation: We employ strict database isolation. Your company's data (personnel, logs, financials) is mathematically segmented from other enterprises on the platform. No cross-tenant data leakage is possible.",
-        "4. Third-Party Sharing: Pragati Enterprises does not sell or trade your project data. Information is only shared with authorized administrators within your specific organization.",
+        "4. Third-Party Sharing: WorkManager does not sell or trade your project data. Information is only shared with authorized administrators within your specific organization.",
         "5. Security: Data is stored in secure, local-first environments with simulated end-to-end encryption to protect sensitive corporate intel."
       ]
     },
     terms: {
       title: "Terms & Conditions",
-      subtitle: "User Agreement for Pragati Platform",
+      subtitle: "User Agreement for WorkManager Platform",
       body: [
         "1. Acceptance of Terms: By registering an enterprise or a personal account, you agree to abide by these operational protocols.",
         "2. Accuracy of Logs: Employees are responsible for the physical accuracy of the 'Meters Laid' logged in the system. Discrepancies between digital logs and physical site audits may lead to disciplinary action as per your company's policy.",
-        "3. Financial Protocol: Advance and Salary requests are subject to hierarchical approval. Pragati Enterprises acts as a ledger and is not responsible for the actual bank transfer of funds.",
+        "3. Financial Protocol: Advance and Salary requests are subject to hierarchical approval. WorkManager acts as a ledger and is not responsible for the actual bank transfer of funds.",
         "4. Geofencing Compliance: Attempting to bypass GPS verification using 'Mock Location' apps is a violation of the system's security integrity and will be flagged to administrators.",
         "5. Project Data Ownership: All work logs and telemetry generated on the platform are the sole property of the registering Enterprise (Company)."
       ]
@@ -88,7 +88,7 @@ const LegalCompliance: React.FC = () => {
                 </div>
                 <p className="text-[10px] font-black text-blue-900 uppercase tracking-widest">Digitally Verified Document</p>
              </div>
-             <p className="text-[9px] text-gray-300 font-bold uppercase tracking-[0.4em]">© Pragati Enterprises Core System 2023</p>
+             <p className="text-[9px] text-gray-300 font-bold uppercase tracking-[0.4em]">© WorkManager Core System 2023</p>
           </div>
         </div>
       </div>

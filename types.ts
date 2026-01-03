@@ -35,12 +35,14 @@ export enum RequestStatus {
   REJECTED = 'REJECTED'
 }
 
-export enum CableType {
-  CAT6 = 'Cate 6',
-  FLEXIBLE = 'Flexible Cable',
-  ARMOUR = 'Armour Cable',
-  FIBER = 'Fiber Optic',
-  COPPER = 'Copper Cable'
+export enum WorkType {
+  CABLE_LAYING = 'Cable Laying',
+  SPLICING = 'Splicing/Jointing',
+  CIVIL_WORK = 'Civil/Trenching',
+  INSTALLATION = 'Equipment Install',
+  TESTING = 'Testing/Comms',
+  MAINTENANCE = 'Maintenance',
+  OTHER = 'Other'
 }
 
 export interface Project {
@@ -101,6 +103,7 @@ export interface Site {
   id: string;
   companyId: string;
   name: string;
+  address?: string;
   lat: number;
   lng: number;
 }
@@ -109,6 +112,7 @@ export interface Attendance {
   id: string;
   userId: string;
   companyId: string;
+  siteId?: string; // Linked to work site
   date: string;
   checkIn: string;
   checkOut?: string;
@@ -125,8 +129,8 @@ export interface WorkLog {
   date: string;
   installationDate: string;
   taskId?: string; // Linked to formal tasks
-  cableType: CableType;
-  cableSize: string;
+  workType: string; // Dynamic work classification
+  subCategory: string; // Size or specific specification
   meters: number;
   description: string;
 }

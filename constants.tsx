@@ -63,12 +63,12 @@ export const Logo: React.FC<LogoProps> = ({
     {showText && (
       <div className="text-center mt-4">
         <h1 className="text-4xl md:text-5xl font-serif font-black tracking-tight leading-none" style={{ color: light ? '#fff' : '#E35D22' }}>
-          PRAGATI
+          WORK
         </h1>
         <div className="flex items-center justify-center space-x-4 mt-2">
           <div className="h-[3px] w-8 md:w-12 bg-[#0D47A1]"></div>
           <p className="text-sm md:text-lg font-bold tracking-[0.2em] uppercase text-[#0D47A1]">
-            ENTERPRISES
+            MANAGER
           </p>
           <div className="h-[3px] w-8 md:w-12 bg-[#0D47A1]"></div>
         </div>
@@ -114,6 +114,11 @@ export const ICONS = {
   Rocket: (props: any) => (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M15.59 14.37a6 6 0 01-5.84 7.38v-4.8m5.84-2.58a14.98 14.98 0 006.16-12.12A14.98 14.98 0 009.63 8.41m5.96 5.96a14.926 14.926 0 01-5.84 1.2l-3.1-3.1a14.926 14.926 0 011.2-5.84m5.74 7.74l3.5 3.5m-7.24-7.24L5.5 5.5" />
+    </svg>
+  ),
+  Android: (props: any) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" {...props}>
+      <path d="M17.523 15.3414C17.218 15.3414 16.968 15.0914 16.968 14.7864V12.1124C16.968 11.8074 17.218 11.5574 17.523 11.5574C17.828 11.5574 18.078 11.8074 18.078 12.1124V14.7864C18.078 15.0914 17.828 15.3414 17.523 15.3414ZM6.477 15.3414C6.172 15.3414 5.922 15.0914 5.922 14.7864V12.1124C5.922 11.8074 6.172 11.5574 6.477 11.5574C6.782 11.5574 7.032 11.8074 7.032 12.1124V14.7864C7.032 15.0914 6.782 15.3414 6.477 15.3414ZM16.037 8.81339L17.413 6.42939C17.488 6.29839 17.443 6.13239 17.312 6.05739C17.181 5.98239 17.015 6.02739 16.94 6.15839L15.548 8.56939C14.526 8.10639 13.313 7.84239 12 7.84239C10.687 7.84239 9.474 8.10639 8.452 8.56939L7.06 6.15839C6.985 6.02739 6.819 5.98239 6.688 6.05739C6.557 6.13239 6.512 6.29839 6.587 6.42939L7.963 8.81339C5.462 10.1634 3.763 12.7214 3.659 15.7064H20.341C20.237 12.7214 18.538 10.1634 16.037 8.81339Z" />
     </svg>
   )
 };

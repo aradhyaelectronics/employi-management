@@ -18,7 +18,7 @@ const getInitialState = (): AppState => {
         projects: parsed.projects || [],
         tasks: parsed.tasks || [],
         leaves: parsed.leaves || [],
-        version: '3.0.0-auth-verify'
+        version: '3.1.0-geofence'
       };
     }
   } catch (e) {}
@@ -28,7 +28,7 @@ const getInitialState = (): AppState => {
       { id: 'p-free', name: 'Standard (Free)', price: 0, durationDays: 365, userLimit: 5, features: ['Basic Attendance', 'Work Logs', 'Manual Payroll'] },
       { id: 'p-pro', name: 'Enterprise Pro', price: 4999, durationDays: 30, userLimit: 50, features: ['Advanced Payroll', 'Geofencing', 'Task Management', 'Leave Portal', 'AI Audits'] }
     ],
-    salarySlips: [], version: '3.0.0-auth-verify'
+    salarySlips: [], version: '3.1.0-geofence'
   };
 };
 
@@ -49,7 +49,7 @@ export const useStore = () => {
     state,
     addUser: async (u: any) => {
       const newUser = { 
-        status: UserStatus.PENDING, // Default to pending for manual adds
+        status: UserStatus.PENDING, 
         ...u, 
         id: `u-${Date.now()}` 
       };
@@ -60,6 +60,12 @@ export const useStore = () => {
       updateState(p => ({
         ...p,
         users: p.users.map(u => u.id === id ? { ...u, ...updates } : u)
+      }));
+    },
+    removeUser: async (id: string) => {
+      updateState(p => ({
+        ...p,
+        users: p.users.filter(u => u.id !== id)
       }));
     },
     addCompany: async (name: string) => {
@@ -83,10 +89,11 @@ export const useStore = () => {
     updateLeaveStatus: async (id: string, status: RequestStatus) => {
       updateState(p => ({ ...p, leaves: p.leaves.map(l => l.id === id ? { ...l, status } : l) }));
     },
-    markAttendance: async (uid: string, cid: string, type: 'IN' | 'OUT', coords?: any, ot?: number, manualDate?: string, manualTime?: string) => {
+    markAttendance: async (uid: string, cid: string, type: 'IN' | 'OUT', coords?: any, ot?: number, manualDate?: string, manualTime?: string, siteId?: string) => {
       const date = manualDate || new Date().toISOString().split('T')[0];
       const time = manualTime || new Date().toLocaleTimeString();
       
+      // 1. Leave Check
       const onLeave = state.leaves.some(l => 
         l.userId === uid && 
         l.status === RequestStatus.APPROVED && 
@@ -94,9 +101,15 @@ export const useStore = () => {
       );
       if (onLeave && type === 'IN' && !manualDate) throw new Error("Attendance blocked: User is on approved leave.");
 
+      // 2. Duplicate Check (Only one punch-in per day allowed)
+      const existingRecord = state.attendance.find(a => a.userId === uid && a.date === date);
+      if (type === 'IN' && existingRecord) {
+        throw new Error(`Duplicate Entry: Attendance for ${date} already exists in the system.`);
+      }
+
       updateState(p => {
         if (type === 'IN') {
-          return { ...p, attendance: [...p.attendance, { id: `a-${Date.now()}`, userId: uid, companyId: cid, date: date, checkIn: time, ...coords }] };
+          return { ...p, attendance: [...p.attendance, { id: `a-${Date.now()}`, userId: uid, companyId: cid, siteId, date: date, checkIn: time, ...coords }] };
         } else {
           return { ...p, attendance: p.attendance.map(a => (a.userId === uid && a.date === date && !a.checkOut) ? { ...a, checkOut: time, overtimeHours: ot } : a) };
         }

@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
 import { AppState } from '../types';
+import { saveState } from '../store';
 
 interface Props {
   state: AppState;
@@ -9,8 +10,28 @@ interface Props {
 const BackendConsole: React.FC<Props> = ({ state }) => {
   const [activeView, setActiveView] = useState<'status' | 'json' | 'sql' | 'apk'>('status');
 
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const importedData = JSON.parse(event.target?.result as string);
+        if (confirm("CRITICAL: This will overwrite your current cloud database. Proceed?")) {
+          saveState(importedData);
+          alert("Cloud Database Synchronized. Please reload the application.");
+          window.location.reload();
+        }
+      } catch (err) {
+        alert("Invalid Data Format. Please use a valid WorkManager Backup file.");
+      }
+    };
+    reader.readAsText(file);
+  };
+
   const SQL_SCHEMA = `
--- PRAGATI CLOUD INFRASTRUCTURE SCHEMA
+-- WORKMANAGER CLOUD INFRASTRUCTURE SCHEMA
 -- Generated for multi-tenant deployment
 
 CREATE TABLE enterprises (
@@ -35,7 +56,7 @@ CREATE TABLE telemetry_logs (
 2. npx cap sync android
 3. Open Android Studio
 4. Generate Signed Bundle / APK
-5. Upload to Pragati Distribution Center
+5. Upload to WorkManager Distribution Center
   `;
 
   const stats = [
@@ -47,7 +68,6 @@ CREATE TABLE telemetry_logs (
 
   return (
     <div className="bg-slate-950 min-h-[80vh] rounded-[3rem] overflow-hidden shadow-2xl border border-slate-800">
-      {/* Sidebar / Header */}
       <div className="flex flex-col md:flex-row h-full">
         <aside className="w-full md:w-64 bg-slate-900/50 p-8 border-r border-slate-800/50">
           <div className="mb-10">
@@ -57,7 +77,7 @@ CREATE TABLE telemetry_logs (
           <nav className="space-y-2">
             {[
               { id: 'status', label: 'System Status' },
-              { id: 'json', label: 'Raw Data Explorer' },
+              { id: 'json', label: 'Migration Tool' },
               { id: 'sql', label: 'SQL Migrations' },
               { id: 'apk', label: 'Build Pipeline' }
             ].map(item => (
@@ -90,10 +110,10 @@ CREATE TABLE telemetry_logs (
                 <h3 className="text-white font-black uppercase tracking-tight mb-6">Environment Health</h3>
                 <div className="space-y-4">
                   {[
-                    { label: 'Database Engine', status: 'Optimal', val: 'IndexedDB / LocalStorage' },
-                    { label: 'Multi-Tenancy', status: 'Secured', val: 'UID Segmentation Active' },
-                    { label: 'Geofencing Service', status: 'Operational', val: 'Native GPS API' },
-                    { label: 'Payroll Engine', status: 'Idle', val: 'Automated 30-Day Cycle' }
+                    { label: 'Database Engine', status: 'Optimal', val: 'IndexedDB / Cloud Local' },
+                    { label: 'Multi-Tenancy', status: 'Secured', val: 'Cloud Segmentation Active' },
+                    { label: 'Cloud URL', status: 'Online', val: window.location.origin },
+                    { label: 'Deployment Strategy', status: 'Google Cloud', val: 'Static Managed' }
                   ].map(h => (
                     <div key={h.label} className="flex items-center justify-between p-4 bg-slate-950 rounded-2xl border border-slate-800/50">
                       <div>
@@ -109,27 +129,45 @@ CREATE TABLE telemetry_logs (
           )}
 
           {activeView === 'json' && (
-            <div className="animate-in fade-in duration-500">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-white font-black uppercase tracking-tight">System State Dump</h3>
-                <button 
-                  onClick={() => navigator.clipboard.writeText(JSON.stringify(state, null, 2))}
-                  className="px-4 py-2 bg-slate-800 text-slate-400 rounded-lg text-[9px] font-black uppercase hover:text-white"
-                >
-                  Copy JSON
-                </button>
+            <div className="animate-in fade-in duration-500 space-y-8">
+              <div className="bg-slate-900 p-8 rounded-3xl border border-slate-800">
+                <h3 className="text-white font-black uppercase tracking-tight mb-2">Cloud Import</h3>
+                <p className="text-xs text-slate-500 mb-6">Restore data from your local computer backup here.</p>
+                <div className="relative group">
+                  <input 
+                    type="file" 
+                    accept=".json"
+                    onChange={handleImport}
+                    className="absolute inset-0 opacity-0 cursor-pointer" 
+                  />
+                  <div className="bg-slate-950 border-2 border-dashed border-slate-800 p-12 text-center rounded-3xl group-hover:border-blue-500 transition-all">
+                    <p className="text-blue-500 font-black uppercase tracking-widest text-[10px]">Click or Drag JSON Backup to Import</p>
+                  </div>
+                </div>
               </div>
-              <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 overflow-x-auto">
-                <pre className="text-[11px] font-mono text-blue-400 leading-relaxed">
-                  {JSON.stringify(state, null, 2)}
-                </pre>
+
+              <div className="bg-slate-900 p-8 rounded-3xl border border-slate-800">
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-white font-black uppercase tracking-tight">Raw Data Explorer</h3>
+                  <button 
+                    onClick={() => navigator.clipboard.writeText(JSON.stringify(state, null, 2))}
+                    className="px-4 py-2 bg-slate-800 text-slate-400 rounded-lg text-[9px] font-black uppercase hover:text-white"
+                  >
+                    Copy JSON State
+                  </button>
+                </div>
+                <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 overflow-x-auto">
+                  <pre className="text-[11px] font-mono text-blue-400 leading-relaxed">
+                    {JSON.stringify(state, null, 2)}
+                  </pre>
+                </div>
               </div>
             </div>
           )}
 
           {activeView === 'sql' && (
             <div className="animate-in fade-in duration-500">
-               <h3 className="text-white font-black uppercase tracking-tight mb-6">Data Migration Hub</h3>
+               <h3 className="text-white font-black uppercase tracking-tight mb-6">Cloud Data Schema</h3>
                <div className="bg-slate-950 p-8 rounded-2xl border border-slate-800">
                  <pre className="text-xs font-mono text-slate-400 whitespace-pre-wrap">{SQL_SCHEMA}</pre>
                </div>
@@ -138,7 +176,7 @@ CREATE TABLE telemetry_logs (
 
           {activeView === 'apk' && (
             <div className="animate-in fade-in duration-500">
-               <h3 className="text-white font-black uppercase tracking-tight mb-6">APK Compilation Registry</h3>
+               <h3 className="text-white font-black uppercase tracking-tight mb-6">Distribution Registry</h3>
                <div className="bg-slate-900 p-8 rounded-2xl border border-orange-900/20">
                  <pre className="text-xs font-mono text-orange-200 whitespace-pre-wrap">{APK_GUIDE}</pre>
                </div>

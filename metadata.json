@@ -1,5 +1,5 @@
 {
-  "name": "Pragati Enterprises",
+  "name": "WorkManager",
   "description": "Multi-tenant workforce & cable management APK",
   "requestFramePermissions": [
     "geolocation"

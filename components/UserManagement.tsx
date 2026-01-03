@@ -7,11 +7,13 @@ interface Props {
   state: AppState;
   addUser: (u: Omit<User, 'id'>) => Promise<User>;
   updateUser: (id: string, updates: Partial<User>) => Promise<void>;
+  removeUser: (id: string) => Promise<void>;
 }
 
-const UserManagement: React.FC<Props> = ({ user, state, addUser, updateUser }) => {
+const UserManagement: React.FC<Props> = ({ user, state, addUser, updateUser, removeUser }) => {
   const isSupervisor = user.role === UserRole.SUPERVISOR;
-  const isAdmin = user.role === UserRole.ADMIN || user.role === UserRole.SUPER_ADMIN;
+  const isAdmin = user.role === UserRole.ADMIN;
+  const isSuper = user.role === UserRole.SUPER_ADMIN;
 
   const [newUser, setNewUser] = useState({ 
     name: '', 
@@ -27,15 +29,19 @@ const UserManagement: React.FC<Props> = ({ user, state, addUser, updateUser }) =
 
   const [editingUser, setEditingUser] = useState<User | null>(null);
   
-  const companyUsers = state.users.filter(u => u.companyId === user.companyId);
+  const companyUsers = useMemo(() => {
+    if (isSuper) return state.users;
+    return state.users.filter(u => u.companyId === user.companyId);
+  }, [state.users, user.companyId, isSuper]);
+
   const companyAdmins = useMemo(() => companyUsers.filter(u => u.role === UserRole.ADMIN), [companyUsers]);
   const companySupervisors = useMemo(() => companyUsers.filter(u => u.role === UserRole.SUPERVISOR), [companyUsers]);
 
   const visibleEmployees = useMemo(() => {
-    if (isAdmin) return companyUsers;
+    if (isSuper || isAdmin) return companyUsers;
     if (isSupervisor) return companyUsers.filter(u => u.supervisorId === user.id);
     return [];
-  }, [companyUsers, user.id, isAdmin, isSupervisor]);
+  }, [companyUsers, user.id, isAdmin, isSupervisor, isSuper]);
 
   useEffect(() => {
     let calculatedOt = 0;
@@ -65,7 +71,8 @@ const UserManagement: React.FC<Props> = ({ user, state, addUser, updateUser }) =
     try {
       await addUser({
         ...newUser,
-        email: newUser.email.toLowerCase().trim(),
+        email: newUser.email.replace(/\s+/g, '').toLowerCase(),
+        mobile: newUser.mobile.replace(/\s+/g, ''),
         companyId: user.companyId
       });
       setNewUser({ 
@@ -83,13 +90,14 @@ const UserManagement: React.FC<Props> = ({ user, state, addUser, updateUser }) =
     try {
       await updateUser(editingUser.id, {
         name: editingUser.name,
-        email: editingUser.email.toLowerCase().trim(),
-        mobile: editingUser.mobile,
+        email: editingUser.email.replace(/\s+/g, '').toLowerCase(),
+        mobile: editingUser.mobile.replace(/\s+/g, ''),
         supervisorId: editingUser.supervisorId,
         salaryType: editingUser.salaryType,
         salaryAmount: editingUser.salaryAmount,
         overtimeRate: editingUser.overtimeRate,
-        status: editingUser.status
+        status: editingUser.status,
+        role: editingUser.role // Role update allowed if isSuper
       });
       setEditingUser(null);
       alert("Success: Personnel profile updated.");
@@ -103,20 +111,28 @@ const UserManagement: React.FC<Props> = ({ user, state, addUser, updateUser }) =
     }
   };
 
+  const handleDeleteUser = async (u: User) => {
+    if (u.id === user.id) return alert("System Error: Cannot delete active session identity.");
+    if (confirm(`CRITICAL ACTION: Are you sure you want to PERMANENTLY remove ${u.name} from the registry? All associated data links will be severed.`)) {
+      await removeUser(u.id);
+      alert(`${u.name} has been purged from the global registry.`);
+    }
+  };
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-       {isAdmin && (
+       {(isAdmin || isSuper) && (
          <div className="lg:col-span-1">
           <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
             <h3 className="text-xl font-bold mb-2 text-gray-800 uppercase tracking-tighter">Enroll Personnel</h3>
             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-8">Establish Chain of Command</p>
             
             <form onSubmit={handleSubmit} className="space-y-5">
-              <input type="text" placeholder="Full Name" className="w-full px-4 py-3 bg-gray-50 rounded-xl border text-sm outline-none" value={newUser.name} onChange={e => setNewUser({ ...newUser, name: e.target.value })} required />
+              <input type="text" placeholder="Full Name" className="w-full px-4 py-3 bg-gray-50 rounded-xl border text-sm font-medium outline-none" value={newUser.name} onChange={e => setNewUser({ ...newUser, name: e.target.value })} required />
               
               <div className="grid grid-cols-2 gap-4">
-                 <input type="email" placeholder="Email ID" className="w-full px-4 py-3 bg-gray-50 rounded-xl border text-sm outline-none" value={newUser.email} onChange={e => setNewUser({ ...newUser, email: e.target.value })} required />
-                 <input type="tel" placeholder="Mobile Number" className="w-full px-4 py-3 bg-gray-50 rounded-xl border text-sm outline-none font-bold" value={newUser.mobile} onChange={e => setNewUser({ ...newUser, mobile: e.target.value })} required />
+                 <input type="email" placeholder="Email ID" className="w-full px-4 py-3 bg-gray-50 rounded-xl border text-sm font-medium outline-none" value={newUser.email} onChange={e => setNewUser({ ...newUser, email: e.target.value })} required />
+                 <input type="tel" placeholder="Mobile Number" className="w-full px-4 py-3 bg-gray-50 rounded-xl border text-sm font-medium outline-none" value={newUser.mobile} onChange={e => setNewUser({ ...newUser, mobile: e.target.value })} required />
               </div>
 
               <div>
@@ -129,6 +145,8 @@ const UserManagement: React.FC<Props> = ({ user, state, addUser, updateUser }) =
                 <select className="w-full px-4 py-3 bg-gray-50 rounded-xl border text-sm font-bold" value={newUser.role} onChange={e => setNewUser({ ...newUser, role: e.target.value as UserRole, supervisorId: '' })}>
                   <option value={UserRole.EMPLOYEE}>Employee (Field Workforce)</option>
                   <option value={UserRole.SUPERVISOR}>Supervisor (Reporting Manager)</option>
+                  {isSuper && <option value={UserRole.ADMIN}>Admin (Enterprise Control)</option>}
+                  {isSuper && <option value={UserRole.SUPER_ADMIN}>Super Admin (System Control)</option>}
                 </select>
               </div>
 
@@ -180,10 +198,12 @@ const UserManagement: React.FC<Props> = ({ user, state, addUser, updateUser }) =
         </div>
        )}
 
-      <div className={isAdmin ? "lg:col-span-2" : "lg:col-span-3"}>
+      <div className={(isAdmin || isSuper) ? "lg:col-span-2" : "lg:col-span-3"}>
         <div className="bg-white rounded-3xl border border-gray-100 overflow-hidden shadow-sm">
           <div className="p-6 border-b bg-gray-50/50 flex justify-between items-center">
-             <h4 className="text-sm font-black text-gray-800 uppercase tracking-widest">{isSupervisor ? 'Team Members Managed' : 'Global Organization Chart'}</h4>
+             <h4 className="text-sm font-black text-gray-800 uppercase tracking-widest">
+               {isSuper ? 'System Identity Registry' : isSupervisor ? 'Team Members Managed' : 'Enterprise Organization Chart'}
+             </h4>
              <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-3 py-1 rounded-full">{visibleEmployees.length} Units</span>
           </div>
           <table className="w-full text-left">
@@ -202,24 +222,34 @@ const UserManagement: React.FC<Props> = ({ user, state, addUser, updateUser }) =
                     <td className="px-8 py-6">
                       <div className="font-bold text-gray-800 text-sm uppercase tracking-tight">{u.name}</div>
                       <div className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">{u.email} | Mob: {u.mobile || '--'}</div>
+                      {isSuper && (
+                        <div className="text-[7px] text-blue-400 font-black uppercase tracking-widest mt-1">COMPANY: {state.companies.find(c => c.id === u.companyId)?.name || 'SYSTEM'}</div>
+                      )}
                     </td>
                     <td className="px-8 py-6 text-center">
                       <div className="flex flex-col items-center gap-2">
-                        <span className={`px-3 py-1 rounded-xl text-[8px] font-black uppercase border ${u.status === UserStatus.ACTIVE ? 'bg-green-50 text-green-600 border-green-100' : u.status === UserStatus.PENDING ? 'bg-orange-50 text-orange-600 border-orange-100' : 'bg-red-50 text-red-600 border-red-100'}`}>
+                        <span className={`px-3 py-1 rounded-xl text-[8px] font-black uppercase border ${u.status === UserStatus.ACTIVE ? 'bg-green-50 text-green-700 border-green-100' : u.status === UserStatus.PENDING ? 'bg-orange-50 text-orange-600 border-orange-100' : 'bg-red-50 text-red-600 border-red-100'}`}>
                           {u.status}
                         </span>
-                        {isAdmin && u.status === UserStatus.PENDING && (
+                        {(isAdmin || isSuper) && u.status === UserStatus.PENDING && (
                            <button onClick={() => handleQuickVerify(u.id)} className="text-[8px] font-black text-blue-600 uppercase tracking-widest hover:underline">Verify Now</button>
                         )}
                       </div>
                     </td>
                     <td className="px-8 py-6 text-center">
-                      <span className={`px-3 py-1 rounded-xl text-[9px] font-black uppercase border transition-colors ${u.role === UserRole.SUPERVISOR ? 'bg-orange-50 text-orange-600 border-orange-100 group-hover:bg-orange-600 group-hover:text-white' : 'bg-blue-50 text-blue-700 border-blue-100 group-hover:bg-blue-700 group-hover:text-white'}`}>
+                      <span className={`px-3 py-1 rounded-xl text-[9px] font-black uppercase border transition-colors ${u.role === UserRole.SUPER_ADMIN ? 'bg-black text-white border-black' : u.role === UserRole.SUPERVISOR ? 'bg-orange-50 text-orange-600 border-orange-100 group-hover:bg-orange-600 group-hover:text-white' : 'bg-blue-50 text-blue-700 border-blue-100 group-hover:bg-blue-700 group-hover:text-white'}`}>
                         {u.role}
                       </span>
                     </td>
                     <td className="px-8 py-6 text-right">
-                      <button onClick={() => setEditingUser(u)} className="text-blue-600 hover:text-blue-800 font-black text-[10px] uppercase tracking-widest transition-colors">Edit Profile</button>
+                      <div className="flex items-center justify-end space-x-3">
+                        <button onClick={() => setEditingUser(u)} className="text-blue-600 hover:text-blue-800 font-black text-[10px] uppercase tracking-widest transition-colors">Edit</button>
+                        {(isSuper || isAdmin) && u.id !== user.id && (
+                          <button onClick={() => handleDeleteUser(u)} className="p-2 text-gray-300 hover:text-red-500 transition-colors">
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -273,6 +303,19 @@ const UserManagement: React.FC<Props> = ({ user, state, addUser, updateUser }) =
                         <input type="email" className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500/10" value={editingUser.email} onChange={e => setEditingUser({...editingUser, email: e.target.value})} required />
                      </div>
                   </div>
+
+                  {/* Super Admin can change Role */}
+                  {isSuper && (
+                    <div className="pt-2">
+                      <label className="block text-[10px] font-black text-purple-600 uppercase tracking-widest mb-1.5 ml-1">Global System Role</label>
+                      <select className="w-full px-4 py-3 bg-purple-50 border border-purple-100 text-purple-900 rounded-xl font-black text-sm outline-none" value={editingUser.role} onChange={e => setEditingUser({...editingUser, role: e.target.value as UserRole})}>
+                        <option value={UserRole.EMPLOYEE}>EMPLOYEE (WORKFORCE)</option>
+                        <option value={UserRole.SUPERVISOR}>SUPERVISOR (MANAGEMENT)</option>
+                        <option value={UserRole.ADMIN}>ADMIN (ENTERPRISE)</option>
+                        <option value={UserRole.SUPER_ADMIN}>SUPER ADMIN (SYSTEM)</option>
+                      </select>
+                    </div>
+                  )}
                </div>
 
                <div className="space-y-4 pt-4">
