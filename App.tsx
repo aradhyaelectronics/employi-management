@@ -14,8 +14,9 @@ import LeavePortal from './components/LeavePortal';
 import ProjectConsole from './components/ProjectConsole';
 import SubscriptionCenter from './components/SubscriptionCenter';
 import BackendConsole from './components/BackendConsole';
+import LegalCompliance from './components/LegalCompliance';
 
-const SESSION_KEY = 'workmanager_session_prod';
+const SESSION_KEY = 'employeemanagement_session_prod';
 
 const App: React.FC = () => {
   const { 
@@ -25,7 +26,6 @@ const App: React.FC = () => {
     removeUser,
     updateUserPin,
     updateUserPassword,
-    updateUserSalary,
     addCompany, 
     addSite, 
     removeSite, 
@@ -92,6 +92,10 @@ const App: React.FC = () => {
   const panelConfig = useMemo(() => {
     if (!currentUser) return { label: 'Guest', color: 'bg-blue-600', nav: [] };
 
+    const commonNav = [
+      { id: 'legal', label: 'Vision & Legal', icon: ICONS.Shield },
+    ];
+
     switch (currentUser.role) {
       case UserRole.SUPER_ADMIN:
         return {
@@ -102,6 +106,7 @@ const App: React.FC = () => {
             { id: 'enterprise', label: 'Enterprise Registry', icon: ICONS.Users },
             { id: 'backend', label: 'Backend Ops', icon: ICONS.Dashboard },
             { id: 'users', label: 'Identity Control', icon: ICONS.Shield },
+            ...commonNav
           ]
         };
       case UserRole.ADMIN:
@@ -115,6 +120,7 @@ const App: React.FC = () => {
             { id: 'attendance', label: 'Attendance Ledger', icon: ICONS.Time },
             { id: 'work', label: 'Work Progress', icon: ICONS.Work },
             { id: 'subscription', label: 'Enterprise Plan', icon: ICONS.Rocket },
+            ...commonNav
           ]
         };
       case UserRole.SUPERVISOR:
@@ -125,6 +131,7 @@ const App: React.FC = () => {
             { id: 'dashboard', label: 'Field Status', icon: ICONS.Dashboard },
             { id: 'attendance', label: 'Team Attendance', icon: ICONS.Time },
             { id: 'work', label: 'Work Progress', icon: ICONS.Work },
+            ...commonNav
           ]
         };
       default: // EMPLOYEE
@@ -136,6 +143,7 @@ const App: React.FC = () => {
             { id: 'attendance', label: 'Punch In/Out', icon: ICONS.Time },
             { id: 'work', label: 'Daily Work Update', icon: ICONS.Work },
             { id: 'financials', label: 'Payment Request', icon: ICONS.Money },
+            ...commonNav
           ]
         };
     }
@@ -307,7 +315,8 @@ const App: React.FC = () => {
             {activeTab === 'users' && <UserManagement user={currentUser} state={state} addUser={addUser} updateUser={updateUser} removeUser={removeUser} />}
             {activeTab === 'subscription' && <SubscriptionCenter user={currentUser} state={state} updatePlan={updateSubscriptionPlanConfig} purchasePlan={purchaseSubscription} />}
             {activeTab === 'enterprise' && <CompanyManagement state={state} removeCompany={removeCompany} purchaseSubscription={purchaseSubscription} />}
-            {activeTab === 'backend' && <BackendConsole state={state} />}
+            {activeTab === 'backend' && <BackendConsole state={state} updateUser={updateUser} removeUser={removeUser} />}
+            {activeTab === 'legal' && <LegalCompliance />}
           </div>
         </main>
       </div>

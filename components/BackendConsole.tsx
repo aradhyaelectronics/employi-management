@@ -1,14 +1,17 @@
 
-import React, { useState } from 'react';
-import { AppState } from '../types';
+import React, { useState, useMemo } from 'react';
+import { AppState, User, UserStatus, UserRole } from '../types';
 import { saveState } from '../store';
 
 interface Props {
   state: AppState;
+  updateUser: (id: string, updates: Partial<User>) => Promise<void>;
+  removeUser: (id: string) => Promise<void>;
 }
 
-const BackendConsole: React.FC<Props> = ({ state }) => {
-  const [activeView, setActiveView] = useState<'status' | 'json' | 'sql' | 'apk'>('status');
+const BackendConsole: React.FC<Props> = ({ state, updateUser, removeUser }) => {
+  const [activeView, setActiveView] = useState<'status' | 'users' | 'json' | 'sql' | 'apk'>('status');
+  const [userSearch, setUserSearch] = useState('');
 
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -30,8 +33,16 @@ const BackendConsole: React.FC<Props> = ({ state }) => {
     reader.readAsText(file);
   };
 
+  const filteredUsers = useMemo(() => {
+    return state.users.filter(u => 
+      u.name.toLowerCase().includes(userSearch.toLowerCase()) || 
+      u.email.toLowerCase().includes(userSearch.toLowerCase()) ||
+      (u.mobile && u.mobile.includes(userSearch))
+    );
+  }, [state.users, userSearch]);
+
   const SQL_SCHEMA = `
--- WORKMANAGER CLOUD INFRASTRUCTURE SCHEMA
+-- EMPLOYEE MANAGEMENT CLOUD INFRASTRUCTURE SCHEMA
 -- Generated for multi-tenant deployment
 
 CREATE TABLE enterprises (
@@ -41,9 +52,18 @@ CREATE TABLE enterprises (
   expiry TIMESTAMP
 );
 
+CREATE TABLE personnel (
+  id UUID PRIMARY KEY,
+  company_id UUID REFERENCES enterprises(id),
+  name VARCHAR(255),
+  email VARCHAR(255) UNIQUE,
+  role VARCHAR(20),
+  status VARCHAR(20)
+);
+
 CREATE TABLE telemetry_logs (
   id UUID PRIMARY KEY,
-  user_id UUID,
+  user_id UUID REFERENCES personnel(id),
   lat DOUBLE PRECISION,
   lng DOUBLE PRECISION,
   event_type VARCHAR(20),
@@ -56,7 +76,7 @@ CREATE TABLE telemetry_logs (
 2. npx cap sync android
 3. Open Android Studio
 4. Generate Signed Bundle / APK
-5. Upload to WorkManager Distribution Center
+5. Upload to Employee Management Distribution Center
   `;
 
   const stats = [
@@ -77,6 +97,7 @@ CREATE TABLE telemetry_logs (
           <nav className="space-y-2">
             {[
               { id: 'status', label: 'System Status' },
+              { id: 'users', label: 'User Master' },
               { id: 'json', label: 'Migration Tool' },
               { id: 'sql', label: 'SQL Migrations' },
               { id: 'apk', label: 'Build Pipeline' }
@@ -124,6 +145,62 @@ CREATE TABLE telemetry_logs (
                     </div>
                   ))}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {activeView === 'users' && (
+            <div className="space-y-6 animate-in fade-in duration-500">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-white font-black uppercase tracking-tight">Global User Management</h3>
+                <input 
+                  type="text" 
+                  placeholder="Filter users..." 
+                  className="bg-slate-900 border border-slate-800 px-4 py-2 rounded-xl text-xs text-white outline-none focus:border-blue-500"
+                  value={userSearch}
+                  onChange={e => setUserSearch(e.target.value)}
+                />
+              </div>
+              <div className="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden">
+                <table className="w-full text-left">
+                  <thead className="bg-slate-950">
+                    <tr>
+                      <th className="px-6 py-4 text-[9px] font-black text-slate-500 uppercase tracking-widest">Name</th>
+                      <th className="px-6 py-4 text-[9px] font-black text-slate-500 uppercase tracking-widest">Company</th>
+                      <th className="px-6 py-4 text-[9px] font-black text-slate-500 uppercase tracking-widest text-center">Status</th>
+                      <th className="px-6 py-4 text-[9px] font-black text-slate-500 uppercase tracking-widest text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {filteredUsers.map(u => (
+                      <tr key={u.id} className="hover:bg-slate-800/30">
+                        <td className="px-6 py-4">
+                          <p className="text-white text-xs font-bold uppercase">{u.name}</p>
+                          <p className="text-[9px] text-slate-500">{u.email}</p>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="text-[10px] font-black text-blue-400 uppercase">{state.companies.find(c => c.id === u.companyId)?.name || 'SYSTEM'}</span>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <button 
+                            onClick={() => updateUser(u.id, { status: u.status === UserStatus.ACTIVE ? UserStatus.BLOCKED : UserStatus.ACTIVE })}
+                            className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase border ${u.status === UserStatus.ACTIVE ? 'bg-green-900/20 text-green-500 border-green-900/30' : 'bg-red-900/20 text-red-500 border-red-900/30'}`}
+                          >
+                            {u.status}
+                          </button>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <button 
+                            onClick={() => { if(confirm(`Delete ${u.name}?`)) removeUser(u.id); }}
+                            className="text-red-500 hover:text-red-400 font-black text-[9px] uppercase"
+                          >
+                            Purge
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}

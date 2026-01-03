@@ -33,7 +33,11 @@ const UserManagement: React.FC<Props> = ({ user, state, addUser, updateUser, rem
     salaryType: SalaryType.DAILY_WAGE,
     salaryAmount: 0,
     overtimeRate: 0,
-    pin: Math.floor(1000 + Math.random() * 9000).toString()
+    pin: Math.floor(1000 + Math.random() * 9000).toString(),
+    pfEnabled: false,
+    pfAmount: 0,
+    medicalEnabled: false,
+    medicalAmount: 0
   });
 
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -51,11 +55,10 @@ const UserManagement: React.FC<Props> = ({ user, state, addUser, updateUser, rem
     return [];
   }, [companyUsers, user.id, isAdmin, isSupervisor, isSuper]);
 
-  // Real-time duplicate check
   const mobileConflict = useMemo(() => {
     const clean = newUser.mobile.replace(/\s+/g, '');
     if (!clean) return false;
-    return state.users.some(u => u.mobile?.replace(/\s+/g, '') === clean);
+    return state.users.some(u => u.mobile?.replace(/\s+/g) === clean);
   }, [newUser.mobile, state.users]);
 
   useEffect(() => {
@@ -82,7 +85,8 @@ const UserManagement: React.FC<Props> = ({ user, state, addUser, updateUser, rem
         name: '', email: '', mobile: '', 
         password: 'PR-' + Math.floor(1000 + Math.random() * 9000), 
         role: UserRole.EMPLOYEE, supervisorId: '', salaryType: SalaryType.DAILY_WAGE, salaryAmount: 0, overtimeRate: 0,
-        pin: Math.floor(1000 + Math.random() * 9000).toString()
+        pin: Math.floor(1000 + Math.random() * 9000).toString(),
+        pfEnabled: false, pfAmount: 0, medicalEnabled: false, medicalAmount: 0
       });
       alert("Success: Personnel enrolled as PENDING.");
     } catch (error: any) { alert(error.message); }
@@ -173,6 +177,24 @@ const UserManagement: React.FC<Props> = ({ user, state, addUser, updateUser, rem
                 </div>
               </div>
 
+              <div className="space-y-4 pt-4 border-t">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Deductions Management</p>
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border">
+                  <div className="flex items-center space-x-2">
+                    <input type="checkbox" id="pf_check" checked={newUser.pfEnabled} onChange={e => setNewUser({...newUser, pfEnabled: e.target.checked})} />
+                    <label htmlFor="pf_check" className="text-[10px] font-bold text-gray-700 uppercase">Provident Fund (PF)</label>
+                  </div>
+                  {newUser.pfEnabled && <input type="number" placeholder="Amt" className="w-20 px-2 py-1 bg-white border rounded text-[10px] font-black" value={newUser.pfAmount || ''} onChange={e => setNewUser({...newUser, pfAmount: parseInt(e.target.value) || 0})} />}
+                </div>
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border">
+                  <div className="flex items-center space-x-2">
+                    <input type="checkbox" id="med_check" checked={newUser.medicalEnabled} onChange={e => setNewUser({...newUser, medicalEnabled: e.target.checked})} />
+                    <label htmlFor="med_check" className="text-[10px] font-bold text-gray-700 uppercase">Medical Insurance</label>
+                  </div>
+                  {newUser.medicalEnabled && <input type="number" placeholder="Amt" className="w-20 px-2 py-1 bg-white border rounded text-[10px] font-black" value={newUser.medicalAmount || ''} onChange={e => setNewUser({...newUser, medicalAmount: parseInt(e.target.value) || 0})} />}
+                </div>
+              </div>
+
               <button type="submit" disabled={mobileConflict} className={`w-full py-4 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl transition-all active:scale-95 ${mobileConflict ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>Complete Enrollment</button>
             </form>
           </div>
@@ -200,6 +222,12 @@ const UserManagement: React.FC<Props> = ({ user, state, addUser, updateUser, rem
                   <td className="px-8 py-6">
                     <div className="font-bold text-gray-800 text-sm uppercase tracking-tight">{u.name}</div>
                     <div className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">{u.role} | {u.mobile || 'No Mobile'}</div>
+                    {(u.pfEnabled || u.medicalEnabled) && (
+                      <div className="flex gap-1 mt-2">
+                        {u.pfEnabled && <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded text-[7px] font-black uppercase">PF</span>}
+                        {u.medicalEnabled && <span className="px-1.5 py-0.5 bg-green-50 text-green-600 rounded text-[7px] font-black uppercase">MED</span>}
+                      </div>
+                    )}
                   </td>
                   <td className="px-8 py-6">
                     {isAdmin || isSuper ? (
@@ -240,8 +268,8 @@ const UserManagement: React.FC<Props> = ({ user, state, addUser, updateUser, rem
       </div>
 
       {editingUser && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-xl p-10 relative overflow-hidden">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300 overflow-y-auto">
+          <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-xl p-10 relative my-8">
             <button onClick={() => setEditingUser(null)} className="absolute top-8 right-8 text-gray-300 hover:text-red-500 transition-colors"><svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg></button>
             <h3 className="text-2xl font-black text-blue-900 tracking-tighter uppercase mb-8">Update Compensation</h3>
             
@@ -294,6 +322,28 @@ const UserManagement: React.FC<Props> = ({ user, state, addUser, updateUser, rem
                         });
                       }} 
                     />
+                  </div>
+               </div>
+
+               <div className="space-y-4 pt-4 border-t">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Deductions Profile</p>
+                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border">
+                    <div className="flex items-center space-x-3">
+                      <input type="checkbox" id="edit_pf" checked={editingUser.pfEnabled} onChange={e => setEditingUser({...editingUser, pfEnabled: e.target.checked})} />
+                      <label htmlFor="edit_pf" className="text-[11px] font-black text-gray-700 uppercase">Enable PF Deduction</label>
+                    </div>
+                    {editingUser.pfEnabled && (
+                      <input type="number" placeholder="Amt ₹" className="w-24 px-3 py-2 bg-white border rounded-xl text-xs font-black" value={editingUser.pfAmount || ''} onChange={e => setEditingUser({...editingUser, pfAmount: parseInt(e.target.value) || 0})} />
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border">
+                    <div className="flex items-center space-x-3">
+                      <input type="checkbox" id="edit_med" checked={editingUser.medicalEnabled} onChange={e => setEditingUser({...editingUser, medicalEnabled: e.target.checked})} />
+                      <label htmlFor="edit_med" className="text-[11px] font-black text-gray-700 uppercase">Enable Medical Insurance</label>
+                    </div>
+                    {editingUser.medicalEnabled && (
+                      <input type="number" placeholder="Amt ₹" className="w-24 px-3 py-2 bg-white border rounded-xl text-xs font-black" value={editingUser.medicalAmount || ''} onChange={e => setEditingUser({...editingUser, medicalAmount: parseInt(e.target.value) || 0})} />
+                    )}
                   </div>
                </div>
 

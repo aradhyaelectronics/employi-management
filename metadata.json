@@ -1,5 +1,5 @@
 {
-  "name": "WorkManager",
+  "name": "Employee Management",
   "description": "Multi-tenant workforce & cable management APK",
   "requestFramePermissions": [
     "geolocation"

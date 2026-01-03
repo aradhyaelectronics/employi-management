@@ -7,6 +7,7 @@ import {
 } from './types';
 
 const STORAGE_KEY = 'pragati_data_v2';
+const STANDARD_SHIFT_HOURS = 8;
 
 const getInitialState = (): AppState => {
   try {
@@ -18,7 +19,7 @@ const getInitialState = (): AppState => {
         projects: parsed.projects || [],
         tasks: parsed.tasks || [],
         leaves: parsed.leaves || [],
-        version: '3.2.0-secure-id'
+        version: '3.6.0-deductions-engine'
       };
     }
   } catch (e) {}
@@ -28,8 +29,22 @@ const getInitialState = (): AppState => {
       { id: 'p-free', name: 'Standard (Free)', price: 0, durationDays: 365, userLimit: 5, features: ['Basic Attendance', 'Work Logs', 'Manual Payroll'] },
       { id: 'p-pro', name: 'Enterprise Pro', price: 4999, durationDays: 30, userLimit: 50, features: ['Advanced Payroll', 'Geofencing', 'Task Management', 'Leave Portal', 'AI Audits'] }
     ],
-    salarySlips: [], version: '3.2.0-secure-id'
+    salarySlips: [], version: '3.6.0-deductions-engine'
   };
+};
+
+const calculateHours = (start: string, end: string): number => {
+  if (!start || !end) return 0;
+  try {
+    const s = start.split(':').map(Number);
+    const e = end.split(':').map(Number);
+    const startMins = s[0] * 60 + s[1];
+    const endMins = e[0] * 60 + e[1];
+    const diff = endMins - startMins;
+    return Math.max(0, diff / 60);
+  } catch {
+    return 0;
+  }
 };
 
 export const saveState = (state: AppState) => localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -48,24 +63,10 @@ export const useStore = () => {
   return {
     state,
     addUser: async (u: any) => {
-      // IDENTITY UNIQUENESS CHECK
       const cleanMobile = (u.mobile || '').replace(/\s+/g, '');
       const cleanEmail = (u.email || '').trim().toLowerCase();
-
-      const exists = state.users.find(existingUser => {
-        const storedMobile = (existingUser.mobile || '').replace(/\s+/g, '');
-        const storedEmail = (existingUser.email || '').trim().toLowerCase();
-        
-        const mobileConflict = cleanMobile && storedMobile === cleanMobile;
-        const emailConflict = cleanEmail && storedEmail === cleanEmail;
-        
-        return mobileConflict || emailConflict;
-      });
-
-      if (exists) {
-        const conflictType = (u.mobile && exists.mobile?.replace(/\s+/g, '') === cleanMobile) ? 'Mobile Number' : 'Email Address';
-        throw new Error(`IDENTITY CONFLICT: This ${conflictType} is already linked to an existing account. Duplicate IDs are not permitted.`);
-      }
+      const exists = state.users.find(ex => (cleanMobile && ex.mobile === cleanMobile) || (cleanEmail && ex.email === cleanEmail));
+      if (exists) throw new Error("Personnel Identity Conflict: Mobile or Email already in registry.");
 
       const newUser = { 
         status: UserStatus.PENDING, 
@@ -78,16 +79,10 @@ export const useStore = () => {
       return newUser;
     },
     updateUser: async (id: string, updates: Partial<User>) => {
-      updateState(p => ({
-        ...p,
-        users: p.users.map(u => u.id === id ? { ...u, ...updates } : u)
-      }));
+      updateState(p => ({ ...p, users: p.users.map(u => u.id === id ? { ...u, ...updates } : u) }));
     },
     removeUser: async (id: string) => {
-      updateState(p => ({
-        ...p,
-        users: p.users.filter(u => u.id !== id)
-      }));
+      updateState(p => ({ ...p, users: p.users.filter(u => u.id !== id) }));
     },
     addCompany: async (name: string) => {
       const c = { id: `c-${Date.now()}`, name, createdAt: new Date().toISOString(), subscriptionPlanId: 'p-free' };
@@ -112,44 +107,25 @@ export const useStore = () => {
     },
     markAttendance: async (uid: string, cid: string, type: 'IN' | 'OUT', coords?: any, ot?: number, manualDate?: string, manualTime?: string, siteId?: string) => {
       const date = manualDate || new Date().toISOString().split('T')[0];
-      const time = manualTime || new Date().toLocaleTimeString();
+      const time = manualTime || new Date().toLocaleTimeString('en-GB', { hour12: false });
       
-      const onLeave = state.leaves.some(l => 
-        l.userId === uid && 
-        l.status === RequestStatus.APPROVED && 
-        date >= l.fromDate && date <= l.toDate
-      );
-      if (onLeave && type === 'IN' && !manualDate) throw new Error("Attendance blocked: User is on approved leave.");
-
-      const existingRecord = state.attendance.find(a => a.userId === uid && a.date === date);
-      if (type === 'IN' && existingRecord) {
-        throw new Error(`Duplicate Entry: Attendance for ${date} already exists in the system.`);
-      }
-
       updateState(p => {
         if (type === 'IN') {
-          return { ...p, attendance: [...p.attendance, { id: `a-${Date.now()}`, userId: uid, companyId: cid, siteId, date: date, checkIn: time, ...coords }] };
+          const exists = p.attendance.find(a => a.userId === uid && a.date === date);
+          if (exists) return p;
+          return { ...p, attendance: [...p.attendance, { id: `a-${Date.now()}`, userId: uid, companyId: cid, siteId, date, checkIn: time, ...coords }] };
         } else {
           return { ...p, attendance: p.attendance.map(a => (a.userId === uid && a.date === date && !a.checkOut) ? { ...a, checkOut: time, overtimeHours: ot } : a) };
         }
       });
     },
     updateAttendance: async (id: string, updates: Partial<Attendance>) => {
-      updateState(p => ({
-        ...p,
-        attendance: p.attendance.map(a => a.id === id ? { ...a, ...updates } : a)
-      }));
+      updateState(p => ({ ...p, attendance: p.attendance.map(a => a.id === id ? { ...a, ...updates } : a) }));
     },
     addWorkLog: async (log: any) => updateState(p => ({ ...p, workLogs: [...p.workLogs, { ...log, id: `w-${Date.now()}` }] })),
     updateUserPin: async (id: string, pin: string) => updateState(p => ({ ...p, users: p.users.map(u => u.id === id ? { ...u, pin } : u) })),
     updateUserPassword: async (id: string, password: string) => {
       updateState(p => ({ ...p, users: p.users.map(u => u.id === id ? { ...u, password } : u) }));
-    },
-    updateUserSalary: async (id: string, salaryAmount: number, salaryType: SalaryType, overtimeRate: number) => {
-      updateState(p => ({
-        ...p,
-        users: p.users.map(u => u.id === id ? { ...u, salaryAmount, salaryType, overtimeRate } : u)
-      }));
     },
     addFinancialRequest: async (req: any) => updateState(p => ({ ...p, requests: [...p.requests, { ...req, id: `r-${Date.now()}` }] })),
     updateRequestStatus: async (id: string, status: RequestStatus) => updateState(p => ({ ...p, requests: p.requests.map(r => r.id === id ? { ...r, status } : r) })),
@@ -162,35 +138,42 @@ export const useStore = () => {
     },
     
     addManualSalarySlip: async (slip: Omit<MonthlySalarySlip, 'id' | 'generatedDate'>) => {
-      const exists = state.salarySlips.some(s => s.userId === slip.userId && s.month === slip.month && s.year === slip.year);
-      if (exists) throw new Error("A salary slip already exists for this personnel in the selected period.");
-
-      updateState(p => ({
-        ...p,
-        salarySlips: [...p.salarySlips, {
-          ...slip,
-          id: `slip-${slip.userId}-${Date.now()}`,
-          generatedDate: new Date().toISOString()
-        }]
-      }));
+      updateState(p => ({ ...p, salarySlips: [...p.salarySlips, { ...slip, id: `slip-${Date.now()}`, generatedDate: new Date().toISOString() }] }));
     },
 
     generateMonthlySlips: async (cid: string, month: number, year: number) => {
       updateState(p => {
         const companyUsers = p.users.filter(u => u.companyId === cid && u.role !== UserRole.SUPER_ADMIN);
+        
         const newSlips: MonthlySalarySlip[] = companyUsers.map(u => {
           const monthAttendance = p.attendance.filter(a => 
             a.userId === u.id && 
             new Date(a.date).getMonth() === month && 
             new Date(a.date).getFullYear() === year
           );
-          const totalOtHours = monthAttendance.reduce((sum, a) => sum + (a.overtimeHours || 0), 0);
-          const otPay = totalOtHours * (u.overtimeRate || 0);
 
-          let basePay = u.salaryAmount || 0;
+          let hourlyRate = 0;
           if (u.salaryType === SalaryType.DAILY_WAGE) {
-            basePay = (u.salaryAmount || 0) * monthAttendance.length;
+            hourlyRate = (u.salaryAmount || 0) / STANDARD_SHIFT_HOURS;
+          } else {
+            hourlyRate = ((u.salaryAmount || 0) / 30) / STANDARD_SHIFT_HOURS;
           }
+
+          let totalCalculatedPay = 0;
+          let totalOtPay = 0;
+          let totalHoursWorked = 0;
+
+          monthAttendance.forEach(att => {
+            if (att.checkIn && att.checkOut) {
+              const hours = calculateHours(att.checkIn, att.checkOut);
+              totalHoursWorked += hours;
+              const regularHours = Math.min(hours, STANDARD_SHIFT_HOURS);
+              totalCalculatedPay += regularHours * hourlyRate;
+              const excessHours = Math.max(0, hours - STANDARD_SHIFT_HOURS);
+              const manualOt = att.overtimeHours || 0;
+              totalOtPay += (excessHours + manualOt) * (u.overtimeRate || hourlyRate);
+            }
+          });
 
           const approvedAdvances = p.requests.filter(r => 
             r.userId === u.id && 
@@ -201,17 +184,23 @@ export const useStore = () => {
           );
           const advanceDeduction = approvedAdvances.reduce((sum, r) => sum + r.amount, 0);
 
+          // Deductions Logic
+          const pfDeduction = u.pfEnabled ? (u.pfAmount || 0) : 0;
+          const medicalDeduction = u.medicalEnabled ? (u.medicalAmount || 0) : 0;
+
           return {
-            id: `slip-${u.id}-${month}-${year}`,
+            id: `slip-${u.id}-${month}-${year}-${Date.now()}`,
             userId: u.id,
             companyId: cid,
             month,
             year,
-            baseAmount: basePay,
-            overtimeAmount: otPay,
-            overtimeHours: totalOtHours,
+            baseAmount: Math.round(totalCalculatedPay),
+            overtimeAmount: Math.round(totalOtPay),
+            overtimeHours: Math.round(totalHoursWorked),
             advanceDeduction: advanceDeduction,
-            totalAmount: (basePay + otPay) - advanceDeduction,
+            pfDeduction: pfDeduction,
+            medicalDeduction: medicalDeduction,
+            totalAmount: Math.round((totalCalculatedPay + totalOtPay) - advanceDeduction - pfDeduction - medicalDeduction),
             status: PaymentStatus.UNPAID,
             generatedDate: new Date().toISOString()
           };

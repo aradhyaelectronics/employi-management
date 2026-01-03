@@ -62,18 +62,18 @@ export const Logo: React.FC<LogoProps> = ({
     
     {showText && (
       <div className="text-center mt-4">
-        <h1 className="text-4xl md:text-5xl font-serif font-black tracking-tight leading-none" style={{ color: light ? '#fff' : '#E35D22' }}>
-          WORK
+        <h1 className="text-3xl md:text-4xl font-serif font-black tracking-tight leading-none" style={{ color: light ? '#fff' : '#E35D22' }}>
+          EMPLOYEE
         </h1>
         <div className="flex items-center justify-center space-x-4 mt-2">
-          <div className="h-[3px] w-8 md:w-12 bg-[#0D47A1]"></div>
-          <p className="text-sm md:text-lg font-bold tracking-[0.2em] uppercase text-[#0D47A1]">
-            MANAGER
+          <div className="h-[3px] w-6 md:w-8 bg-[#0D47A1]"></div>
+          <p className="text-[10px] md:text-sm font-bold tracking-[0.2em] uppercase text-[#0D47A1]">
+            MANAGEMENT
           </p>
-          <div className="h-[3px] w-8 md:w-12 bg-[#0D47A1]"></div>
+          <div className="h-[3px] w-6 md:w-8 bg-[#0D47A1]"></div>
         </div>
         <p className="text-[10px] md:text-xs font-medium text-gray-500 mt-2 tracking-wide italic">
-          Workforce & Cable Project Management
+          Workforce & Project Management System
         </p>
       </div>
     )}

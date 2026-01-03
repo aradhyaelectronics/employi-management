@@ -1,7 +1,7 @@
 
 {
-  "appId": "com.workmanager.app",
-  "appName": "WorkManager",
+  "appId": "com.employeemanagement.app",
+  "appName": "Employee Management",
   "webDir": "dist",
   "bundledWebRuntime": false,
   "server": {

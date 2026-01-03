@@ -89,6 +89,10 @@ export interface User {
   salaryType?: SalaryType;
   salaryAmount?: number;
   overtimeRate?: number;
+  pfEnabled?: boolean;
+  pfAmount?: number;
+  medicalEnabled?: boolean;
+  medicalAmount?: number;
 }
 
 export interface Company {
@@ -157,6 +161,8 @@ export interface MonthlySalarySlip {
   overtimeAmount: number;
   overtimeHours: number;
   advanceDeduction: number; 
+  pfDeduction: number;
+  medicalDeduction: number;
   totalAmount: number; 
   status: PaymentStatus;
   generatedDate: string;
