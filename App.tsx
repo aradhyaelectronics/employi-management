@@ -60,8 +60,8 @@ const App: React.FC = () => {
   const [authError, setAuthError] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({ 
-    identifier: '', // Can be Email or Mobile
-    secret: '',     // Can be Password or PIN
+    identifier: '', 
+    secret: '',     
     name: '',
     companyName: '' 
   });
@@ -113,6 +113,7 @@ const App: React.FC = () => {
             { id: 'users', label: 'Team Control', icon: ICONS.Users },
             { id: 'financials', label: 'Payroll & Advances', icon: ICONS.Money },
             { id: 'attendance', label: 'Attendance Ledger', icon: ICONS.Time },
+            { id: 'work', label: 'Work Progress', icon: ICONS.Work },
             { id: 'subscription', label: 'Enterprise Plan', icon: ICONS.Rocket },
           ]
         };
@@ -124,8 +125,6 @@ const App: React.FC = () => {
             { id: 'dashboard', label: 'Field Status', icon: ICONS.Dashboard },
             { id: 'attendance', label: 'Team Attendance', icon: ICONS.Time },
             { id: 'work', label: 'Work Progress', icon: ICONS.Work },
-            { id: 'projects', label: 'Assigned Projects', icon: ICONS.Rocket },
-            { id: 'users', label: 'My Personnel', icon: ICONS.Users },
           ]
         };
       default: // EMPLOYEE
@@ -135,9 +134,8 @@ const App: React.FC = () => {
           nav: [
             { id: 'dashboard', label: 'My Desk', icon: ICONS.Dashboard },
             { id: 'attendance', label: 'Punch In/Out', icon: ICONS.Time },
-            { id: 'work', label: 'Submit Logs', icon: ICONS.Work },
-            { id: 'leaves', label: 'Apply Leave', icon: ICONS.Shield },
-            { id: 'financials', label: 'My Finances', icon: ICONS.Money },
+            { id: 'work', label: 'Daily Work Update', icon: ICONS.Work },
+            { id: 'financials', label: 'Payment Request', icon: ICONS.Money },
           ]
         };
     }
@@ -148,17 +146,24 @@ const App: React.FC = () => {
     setIsAuthenticating(true);
     setAuthError(null);
 
-    await new Promise(r => setTimeout(r, 800));
+    await new Promise(r => setTimeout(r, 600));
 
-    const inputIdentifier = formData.identifier.trim().toLowerCase();
+    const rawId = formData.identifier.trim();
+    const inputIdentifier = rawId.toLowerCase();
+    const cleanInputId = rawId.replace(/\s+/g, ''); 
     const secret = formData.secret.trim();
 
     if (isLogin) {
       const user = state.users.find(u => {
         const storedEmail = (u.email || '').trim().toLowerCase();
         const storedMobile = (u.mobile || '').trim();
-        // Allow login via Mobile + PIN or Email + Password
-        const idMatch = storedEmail === inputIdentifier || storedMobile === inputIdentifier;
+        
+        const idMatch = 
+          storedEmail === inputIdentifier || 
+          storedEmail === cleanInputId ||
+          storedMobile === cleanInputId || 
+          storedMobile === inputIdentifier;
+
         const secretMatch = u.password === secret || u.pin === secret;
         return idMatch && secretMatch;
       });
@@ -177,7 +182,7 @@ const App: React.FC = () => {
         setCurrentUser(user);
         setFormData({ identifier: '', secret: '', name: '', companyName: '' });
       } else { 
-        setAuthError('AUTH FAILURE: Invalid Credentials.'); 
+        setAuthError('AUTH FAILURE: Invalid Credentials or formatting error.'); 
       }
     } else {
       try {
@@ -220,26 +225,26 @@ const App: React.FC = () => {
            </h2>
            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mt-2">Mobile or Email Login Enabled</p>
         </div>
-        {authError && <p className="mb-4 text-red-500 text-[10px] font-black uppercase text-center">{authError}</p>}
+        {authError && <div className="mb-4 bg-red-50 p-3 rounded-xl border border-red-100 text-red-600 text-[10px] font-black uppercase text-center leading-tight animate-pulse">{authError}</div>}
         <form onSubmit={handleAuth} className="space-y-4">
           {!isLogin && (
             <div className="space-y-4">
-              {!isSystemLogin && <input type="text" placeholder="Enterprise Name" className="w-full px-5 py-4 bg-gray-50 rounded-2xl border-2 border-transparent font-bold outline-none" value={formData.companyName} onChange={e => setFormData({ ...formData, companyName: e.target.value })} required />}
-              <input type="text" placeholder="Full Name" className="w-full px-5 py-4 bg-gray-50 rounded-2xl border-2 border-transparent font-bold outline-none" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} required />
+              {!isSystemLogin && <input type="text" placeholder="Enterprise Name" className="w-full px-5 py-4 bg-gray-50 rounded-2xl border-2 border-transparent font-bold outline-none focus:border-blue-200 transition-all" value={formData.companyName} onChange={e => setFormData({ ...formData, companyName: e.target.value })} required />}
+              <input type="text" placeholder="Full Name" className="w-full px-5 py-4 bg-gray-50 rounded-2xl border-2 border-transparent font-bold outline-none focus:border-blue-200 transition-all" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} required />
             </div>
           )}
-          <input type="text" placeholder="Mobile or Email" className="w-full px-5 py-4 bg-gray-50 rounded-2xl border-2 border-transparent font-bold outline-none" value={formData.identifier} onChange={e => setFormData({ ...formData, identifier: e.target.value })} required />
-          <input type={showPassword ? "text" : "password"} placeholder="Password or PIN" className="w-full px-5 py-4 bg-gray-50 rounded-2xl border-2 border-transparent font-bold outline-none text-center tracking-[0.5em]" value={formData.secret} onChange={e => setFormData({ ...formData, secret: e.target.value })} required />
+          <input type="text" placeholder="Mobile or Email" className="w-full px-5 py-4 bg-gray-50 rounded-2xl border-2 border-transparent font-bold outline-none focus:border-blue-200 transition-all" value={formData.identifier} onChange={e => setFormData({ ...formData, identifier: e.target.value })} required />
+          <input type={showPassword ? "text" : "password"} placeholder="Password or PIN" className="w-full px-5 py-4 bg-gray-50 rounded-2xl border-2 border-transparent font-bold outline-none text-center tracking-[0.5em] focus:border-blue-200 transition-all" value={formData.secret} onChange={e => setFormData({ ...formData, secret: e.target.value })} required />
           <div className="flex justify-end">
             <button type="button" onClick={() => setShowPassword(!showPassword)} className="text-[9px] font-black uppercase text-gray-400 hover:text-blue-600 transition-colors">
               {showPassword ? 'Hide Secret' : 'Show Secret'}
             </button>
           </div>
-          <button type="submit" disabled={isAuthenticating} className={`w-full py-4 text-white rounded-[1.2rem] font-black uppercase text-[10px] tracking-[0.2em] shadow-xl ${isSystemLogin ? 'bg-slate-800' : 'bg-orange-600 hover:bg-orange-700'}`}>
+          <button type="submit" disabled={isAuthenticating} className={`w-full py-4 text-white rounded-[1.2rem] font-black uppercase text-[10px] tracking-[0.2em] shadow-xl ${isSystemLogin ? 'bg-slate-800' : 'bg-orange-600 hover:bg-orange-700'} transition-all active:scale-95`}>
             {isAuthenticating ? 'Authenticating...' : (isLogin ? 'Access Console' : 'Enroll Enterprise')}
           </button>
         </form>
-        <button onClick={() => setIsLogin(!isLogin)} className="w-full mt-6 text-gray-400 font-black text-[9px] uppercase tracking-widest">{isLogin ? 'Create New Account' : 'Return to Login'}</button>
+        <button onClick={() => setIsLogin(!isLogin)} className="w-full mt-6 text-gray-400 font-black text-[9px] uppercase tracking-widest hover:text-blue-900 transition-colors">{isLogin ? 'Create New Account' : 'Return to Login'}</button>
       </div>
     </div>
   );
@@ -271,7 +276,18 @@ const App: React.FC = () => {
       </aside>
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
         <header className="sticky top-0 z-[60] bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center space-x-4"><h1 className="text-lg font-black text-gray-900 uppercase tracking-tighter">{panelConfig.nav.find(i => i.id === activeTab)?.label || 'Overview'}</h1></div>
+          <div className="flex items-center space-x-4">
+            {activeTab !== 'dashboard' && (
+              <button 
+                onClick={() => setActiveTab('dashboard')} 
+                className="flex items-center space-x-2 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-xl text-[10px] font-black text-gray-600 uppercase transition-all"
+              >
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={3} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                <span>Back</span>
+              </button>
+            )}
+            <h1 className="text-lg font-black text-gray-900 uppercase tracking-tighter">{panelConfig.nav.find(i => i.id === activeTab)?.label || 'Overview'}</h1>
+          </div>
           <div className="flex items-center space-x-4">
              <div className="text-right hidden sm:block">
                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{state.companies.find(c => c.id === currentUser.companyId)?.name || 'System Root'}</p>

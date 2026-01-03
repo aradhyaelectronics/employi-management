@@ -18,7 +18,7 @@ const getInitialState = (): AppState => {
         projects: parsed.projects || [],
         tasks: parsed.tasks || [],
         leaves: parsed.leaves || [],
-        version: '3.1.0-geofence'
+        version: '3.2.0-secure-id'
       };
     }
   } catch (e) {}
@@ -28,7 +28,7 @@ const getInitialState = (): AppState => {
       { id: 'p-free', name: 'Standard (Free)', price: 0, durationDays: 365, userLimit: 5, features: ['Basic Attendance', 'Work Logs', 'Manual Payroll'] },
       { id: 'p-pro', name: 'Enterprise Pro', price: 4999, durationDays: 30, userLimit: 50, features: ['Advanced Payroll', 'Geofencing', 'Task Management', 'Leave Portal', 'AI Audits'] }
     ],
-    salarySlips: [], version: '3.1.0-geofence'
+    salarySlips: [], version: '3.2.0-secure-id'
   };
 };
 
@@ -48,9 +48,30 @@ export const useStore = () => {
   return {
     state,
     addUser: async (u: any) => {
+      // IDENTITY UNIQUENESS CHECK
+      const cleanMobile = (u.mobile || '').replace(/\s+/g, '');
+      const cleanEmail = (u.email || '').trim().toLowerCase();
+
+      const exists = state.users.find(existingUser => {
+        const storedMobile = (existingUser.mobile || '').replace(/\s+/g, '');
+        const storedEmail = (existingUser.email || '').trim().toLowerCase();
+        
+        const mobileConflict = cleanMobile && storedMobile === cleanMobile;
+        const emailConflict = cleanEmail && storedEmail === cleanEmail;
+        
+        return mobileConflict || emailConflict;
+      });
+
+      if (exists) {
+        const conflictType = (u.mobile && exists.mobile?.replace(/\s+/g, '') === cleanMobile) ? 'Mobile Number' : 'Email Address';
+        throw new Error(`IDENTITY CONFLICT: This ${conflictType} is already linked to an existing account. Duplicate IDs are not permitted.`);
+      }
+
       const newUser = { 
         status: UserStatus.PENDING, 
         ...u, 
+        mobile: cleanMobile,
+        email: cleanEmail,
         id: `u-${Date.now()}` 
       };
       updateState(p => ({ ...p, users: [...p.users, newUser] }));

@@ -51,6 +51,13 @@ const UserManagement: React.FC<Props> = ({ user, state, addUser, updateUser, rem
     return [];
   }, [companyUsers, user.id, isAdmin, isSupervisor, isSuper]);
 
+  // Real-time duplicate check
+  const mobileConflict = useMemo(() => {
+    const clean = newUser.mobile.replace(/\s+/g, '');
+    if (!clean) return false;
+    return state.users.some(u => u.mobile?.replace(/\s+/g, '') === clean);
+  }, [newUser.mobile, state.users]);
+
   useEffect(() => {
     setNewUser(prev => ({ 
       ...prev, 
@@ -60,6 +67,10 @@ const UserManagement: React.FC<Props> = ({ user, state, addUser, updateUser, rem
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (mobileConflict) {
+      alert("ERROR: This mobile number is already assigned to another personnel ID.");
+      return;
+    }
     try {
       await addUser({
         ...newUser,
@@ -112,7 +123,10 @@ const UserManagement: React.FC<Props> = ({ user, state, addUser, updateUser, rem
               
               <div className="grid grid-cols-2 gap-4">
                  <input type="email" placeholder="Email ID" className="w-full px-4 py-3 bg-gray-50 rounded-xl border text-sm font-medium outline-none" value={newUser.email} onChange={e => setNewUser({ ...newUser, email: e.target.value })} required />
-                 <input type="tel" placeholder="Mobile Number" className="w-full px-4 py-3 bg-gray-50 rounded-xl border text-sm font-medium outline-none" value={newUser.mobile} onChange={e => setNewUser({ ...newUser, mobile: e.target.value })} required />
+                 <div className="relative">
+                   <input type="tel" placeholder="Mobile Number" className={`w-full px-4 py-3 bg-gray-50 rounded-xl border text-sm font-medium outline-none transition-all ${mobileConflict ? 'border-red-500 bg-red-50' : ''}`} value={newUser.mobile} onChange={e => setNewUser({ ...newUser, mobile: e.target.value })} required />
+                   {mobileConflict && <p className="text-[8px] font-black text-red-600 uppercase mt-1 ml-1">Already in Registry</p>}
+                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -159,7 +173,7 @@ const UserManagement: React.FC<Props> = ({ user, state, addUser, updateUser, rem
                 </div>
               </div>
 
-              <button type="submit" className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl hover:bg-blue-700 transition-all active:scale-95">Complete Enrollment</button>
+              <button type="submit" disabled={mobileConflict} className={`w-full py-4 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl transition-all active:scale-95 ${mobileConflict ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>Complete Enrollment</button>
             </form>
           </div>
         </div>

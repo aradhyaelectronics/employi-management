@@ -13,7 +13,7 @@ interface Props {
 }
 
 const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-  const R = 6371e3;
+  const R = 6371e3; // Earth radius in meters
   const φ1 = lat1 * Math.PI / 180;
   const φ2 = lat2 * Math.PI / 180;
   const Δφ = (lat2 - lat1) * Math.PI / 180;
@@ -37,6 +37,7 @@ const AttendancePanel: React.FC<Props> = ({ user, state, markAttendance, updateA
   const [selectedSiteId, setSelectedSiteId] = useState<string>('');
   const [overtimeHours, setOvertimeHours] = useState<number>(0);
   const [isLocating, setIsLocating] = useState(true);
+  const [geoError, setGeoError] = useState<string | null>(null);
 
   const [isManualMode, setIsManualMode] = useState(false);
   const [manualData, setManualData] = useState({ userId: '', siteId: '', date: today, checkIn: '09:00', checkOut: '18:00', ot: 0 });
@@ -49,17 +50,20 @@ const AttendancePanel: React.FC<Props> = ({ user, state, markAttendance, updateA
 
   useEffect(() => {
     if (!navigator.geolocation) {
+      setGeoError("GEOLOCATION NOT SUPPORTED BY BROWSER");
       setIsLocating(false);
       return;
     }
 
     const watchId = navigator.geolocation.watchPosition((pos) => {
       setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      setGeoError(null);
       setIsLocating(false);
     }, (error) => {
       console.error("GPS Error:", error);
+      setGeoError(error.message.toUpperCase());
       setIsLocating(false);
-    }, { enableHighAccuracy: true });
+    }, { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 });
 
     return () => navigator.geolocation.clearWatch(watchId);
   }, []);
@@ -71,7 +75,9 @@ const AttendancePanel: React.FC<Props> = ({ user, state, markAttendance, updateA
     return getDistance(coords.lat, coords.lng, selectedSite.lat, selectedSite.lng);
   }, [coords, selectedSite]);
 
-  const canPunchIn = isSuper || (selectedSiteId && currentDistance <= 100);
+  // STRICT GEOFENCING: Restricted to 100m. Admins can bypass for manual corrections.
+  const isWithinRange = currentDistance <= 100;
+  const canPunchIn = (isSuper || isAdmin) || (selectedSiteId && isWithinRange);
   const isOnLeave = state.leaves.some(l => l.userId === user.id && l.status === RequestStatus.APPROVED && today >= l.fromDate && today <= l.toDate);
 
   const resolveAddress = async () => {
@@ -175,6 +181,12 @@ const AttendancePanel: React.FC<Props> = ({ user, state, markAttendance, updateA
           <p className="text-gray-400 font-bold uppercase text-[10px] mb-8 tracking-[0.2em]">{new Date().toDateString()}</p>
           
           <div className="flex flex-col items-center gap-6">
+            {geoError && (
+              <div className="w-full bg-red-900 text-white p-4 rounded-2xl mb-4 text-[9px] font-black uppercase tracking-widest border border-red-800 animate-pulse">
+                CRITICAL ERROR: {geoError}. Enable GPS to continue.
+              </div>
+            )}
+            
             {isOnLeave && (
                <div className="w-full bg-red-50 p-4 rounded-2xl border border-red-100 mb-4">
                   <p className="text-red-600 text-[10px] font-black uppercase tracking-widest text-center">Active Approved Leave Detected</p>
@@ -193,37 +205,46 @@ const AttendancePanel: React.FC<Props> = ({ user, state, markAttendance, updateA
                   {companySites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
                 {selectedSiteId && (
-                  <p className={`text-[10px] font-black uppercase tracking-widest mt-2 flex items-center p-2 rounded-lg border ${currentDistance <= 100 ? 'bg-green-50 text-green-700 border-green-100' : 'bg-red-50 text-red-700 border-red-100'}`}>
-                    <span className={`w-2.5 h-2.5 rounded-full mr-2 ${currentDistance <= 100 ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></span>
-                    {currentDistance <= 100 
-                      ? `Within Site Radius (${Math.round(currentDistance)}m)` 
-                      : `Access Restricted: You are ${Math.round(currentDistance)}m away. Move closer.`
-                    }
-                  </p>
+                  <div className={`text-[10px] font-black uppercase tracking-widest mt-2 p-4 rounded-2xl border transition-all duration-500 ${isWithinRange ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                    <div className="flex items-center justify-between mb-2">
+                       <span className="flex items-center">
+                          <span className={`w-3 h-3 rounded-full mr-2 ${isWithinRange ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></span>
+                          {isWithinRange ? 'TARGET ACQUIRED' : 'OUTSIDE SECTOR'}
+                       </span>
+                       <span className="font-mono text-xs">{Math.round(currentDistance)}m FROM HUB</span>
+                    </div>
+                    {!isWithinRange && <p className="text-[8px] opacity-70 leading-tight">GEOFENCE RESTRICTION: You must be within 100m of the registered site coordinates to verify attendance.</p>}
+                  </div>
                 )}
               </div>
             ) : (
-              <div className="w-full bg-blue-50 p-4 rounded-2xl border border-blue-100 mb-4">
-                 <p className="text-blue-900 text-[10px] font-black uppercase tracking-widest text-center">Daily Entry Captured: {userTodayRecord.checkIn} {userTodayRecord.checkOut ? `— ${userTodayRecord.checkOut}` : ''}</p>
+              <div className="w-full bg-blue-50 p-6 rounded-[2rem] border border-blue-100 mb-4 flex flex-col items-center">
+                 <svg className="w-8 h-8 text-blue-600 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                 <p className="text-blue-900 text-[10px] font-black uppercase tracking-widest text-center leading-relaxed">Movement Logged Successfully<br/><span className="text-[12px] opacity-80">{userTodayRecord.checkIn} {userTodayRecord.checkOut ? `— ${userTodayRecord.checkOut}` : ' (Active)'}</span></p>
               </div>
             )}
 
             <div className="flex justify-center gap-4 w-full">
               <button 
                 onClick={() => {
+                  if (!coords) return alert("System still resolving your location. Please wait.");
                   try {
-                    markAttendance(user.id, user.companyId, 'IN', coords || undefined, 0, undefined, undefined, selectedSiteId);
+                    markAttendance(user.id, user.companyId, 'IN', coords, 0, undefined, undefined, selectedSiteId);
+                    alert("Attendance Verified & Logged.");
                   } catch (e: any) {
                     alert(e.message);
                   }
                 }} 
-                disabled={!!userTodayRecord || !canPunchIn || isOnLeave} 
-                className={`flex-1 px-8 py-5 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all ${(!canPunchIn || isOnLeave || !!userTodayRecord) ? 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-50' : 'bg-green-600 text-white shadow-xl shadow-green-100 hover:bg-green-700 active:scale-95'}`}
+                disabled={!!userTodayRecord || !canPunchIn || isOnLeave || isLocating} 
+                className={`flex-1 px-8 py-5 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all ${(!canPunchIn || isOnLeave || !!userTodayRecord || isLocating) ? 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-50' : 'bg-green-600 text-white shadow-xl shadow-green-100 hover:bg-green-700 active:scale-95'}`}
               >
-                Punch In
+                {isLocating ? 'Syncing GPS...' : 'Punch In'}
               </button>
               <button 
-                onClick={() => markAttendance(user.id, user.companyId, 'OUT', coords || undefined, overtimeHours)} 
+                onClick={() => {
+                   markAttendance(user.id, user.companyId, 'OUT', coords || undefined, overtimeHours);
+                   alert("Session Closed.");
+                }} 
                 disabled={!userTodayRecord || !!userTodayRecord.checkOut} 
                 className="flex-1 px-8 py-5 rounded-2xl font-black uppercase text-[10px] tracking-widest bg-red-600 text-white shadow-xl shadow-red-100 disabled:opacity-50 transition-all hover:bg-red-700 active:scale-95"
               >

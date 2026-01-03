@@ -94,6 +94,7 @@ export interface User {
 export interface Company {
   id: string;
   name: string;
+  address?: string;
   createdAt: string;
   subscriptionPlanId?: string;
   subscriptionExpiry?: string;
