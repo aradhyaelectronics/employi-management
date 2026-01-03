@@ -210,7 +210,7 @@ const App: React.FC = () => {
 
   if (!currentUser) return (
     <div className={`min-h-screen flex items-center justify-center p-4 transition-all duration-700 ${isSystemLogin ? 'bg-slate-950' : 'bg-[#0D47A1]'}`}>
-      <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md p-8 md:p-12 relative overflow-hidden">
+      <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md p-8 md:p-12 relative overflow-hidden flex flex-col items-center">
         <Logo iconClassName="w-20 h-16 mx-auto mb-2" showText={false} />
         <div className="text-center mb-8">
            <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tighter leading-none">
@@ -218,8 +218,8 @@ const App: React.FC = () => {
            </h2>
            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mt-2">Mobile or Email Login Enabled</p>
         </div>
-        {authError && <div className="mb-4 bg-red-50 p-3 rounded-xl border border-red-100 text-red-600 text-[10px] font-black uppercase text-center leading-tight animate-in shake duration-300">{authError}</div>}
-        <form onSubmit={handleAuth} className="space-y-4">
+        {authError && <div className="mb-4 bg-red-50 p-3 rounded-xl border border-red-100 text-red-600 text-[10px] font-black uppercase text-center leading-tight animate-in shake duration-300 w-full">{authError}</div>}
+        <form onSubmit={handleAuth} className="space-y-4 w-full">
           {!isLogin && (
             <div className="space-y-4">
               {!isSystemLogin && <input type="text" placeholder="Enterprise Name" className="w-full px-5 py-4 bg-gray-50 rounded-2xl border-2 border-transparent font-bold outline-none focus:border-blue-200 transition-all" value={formData.companyName} onChange={e => setFormData({ ...formData, companyName: e.target.value })} required />}
@@ -237,9 +237,14 @@ const App: React.FC = () => {
             {isAuthenticating ? 'Verifying...' : (isLogin ? 'Access Console' : 'Enroll Enterprise')}
           </button>
         </form>
-        <div className="mt-8 pt-6 border-t border-gray-50 flex flex-col gap-2">
+        <div className="mt-8 pt-6 border-t border-gray-50 flex flex-col gap-2 w-full">
            <button onClick={() => setIsLogin(!isLogin)} className="w-full text-gray-400 font-black text-[9px] uppercase tracking-widest hover:text-blue-900 transition-colors">{isLogin ? 'Create New Account' : 'Return to Login'}</button>
            <button onClick={() => { setIsSystemLogin(!isSystemLogin); setIsLogin(true); }} className="w-full text-gray-300 font-black text-[8px] uppercase tracking-[0.4em] hover:text-slate-900 transition-colors">Internal Ops Access</button>
+        </div>
+        
+        {/* Footer in Login View */}
+        <div className="mt-8 text-center opacity-30">
+          <p className="text-[7px] font-black uppercase tracking-[0.5em] text-gray-500">Developed by Pragati Enterprises</p>
         </div>
       </div>
     </div>
@@ -268,6 +273,11 @@ const App: React.FC = () => {
         </nav>
         <div className="pt-6 border-t border-white/10">
           <button onClick={() => setCurrentUser(null)} className="w-full py-3 bg-red-600/20 text-red-100 hover:bg-red-600/40 rounded-xl font-black uppercase text-[9px] transition-colors">Terminate Session</button>
+          
+          {/* Sidebar Footer */}
+          <div className="mt-6 text-center opacity-30">
+            <p className="text-[7px] font-black uppercase tracking-[0.4em] text-white">Pragati Enterprises</p>
+          </div>
         </div>
       </aside>
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
@@ -293,7 +303,7 @@ const App: React.FC = () => {
           </div>
         </header>
         <main className="flex-1 p-6 md:p-12 overflow-y-auto mb-20 md:mb-0">
-          <div className="max-w-7xl mx-auto">
+          <div className="max-w-7xl mx-auto min-h-[70vh]">
             {activeTab === 'dashboard' && <Dashboard user={currentUser} state={state} updatePassword={updateUserPassword} />}
             {activeTab === 'projects' && <ProjectConsole user={currentUser} state={state} addProject={addProject} addTask={addTask} updateTaskStatus={updateTaskStatus} />}
             {activeTab === 'attendance' && <AttendancePanel user={currentUser} state={state} markAttendance={markAttendance} updateAttendance={updateAttendance} addSite={addSite} removeSite={removeSite} />}
@@ -306,6 +316,12 @@ const App: React.FC = () => {
             {activeTab === 'backend' && <BackendConsole state={state} updateUser={updateUser} removeUser={removeUser} />}
             {activeTab === 'legal' && <LegalCompliance />}
           </div>
+          
+          {/* Global Content Footer */}
+          <footer className="mt-16 py-8 border-t border-gray-100 text-center opacity-40">
+            <p className="text-[9px] font-black text-gray-400 uppercase tracking-[0.5em]">Developed by Pragati Enterprises</p>
+            <p className="text-[7px] font-bold text-gray-300 uppercase tracking-widest mt-2">Enterprise Infrastructure Management System v4.0</p>
+          </footer>
         </main>
       </div>
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t flex justify-around items-center px-4 py-3 z-[100] shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
