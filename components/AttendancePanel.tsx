@@ -1,12 +1,13 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { User, AppState, UserRole, Site, RequestStatus } from '../types';
+import { User, AppState, UserRole, Site, RequestStatus, Attendance } from '../types';
 import { GoogleGenAI, Type } from "@google/genai";
 
 interface Props {
   user: User;
   state: AppState;
   markAttendance: (userId: string, companyId: string, type: 'IN' | 'OUT', coords?: { lat: number; lng: number }, overtimeHours?: number, manualDate?: string, manualTime?: string, siteId?: string) => void;
+  updateAttendance: (id: string, updates: Partial<Attendance>) => Promise<void>;
   addSite: (site: Omit<Site, 'id'>) => Promise<void>;
   removeSite: (id: string) => Promise<void>;
 }
@@ -22,13 +23,14 @@ const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => 
   return R * c; 
 };
 
-const AttendancePanel: React.FC<Props> = ({ user, state, markAttendance, addSite, removeSite }) => {
+const AttendancePanel: React.FC<Props> = ({ user, state, markAttendance, updateAttendance, addSite, removeSite }) => {
   const isSuper = user.role === UserRole.SUPER_ADMIN;
   const isAdmin = user.role === UserRole.ADMIN;
   const isSupervisor = user.role === UserRole.SUPERVISOR;
   const today = new Date().toISOString().split('T')[0];
   
-  const companyAttendance = useMemo(() => isSuper ? state.attendance.filter(a => a.date === today) : state.attendance.filter(a => a.companyId === user.companyId && a.date === today), [state.attendance, user.companyId, isSuper, today]);
+  const [ledgerDate, setLedgerDate] = useState(today);
+  const companyAttendance = useMemo(() => isSuper ? state.attendance.filter(a => a.date === ledgerDate) : state.attendance.filter(a => a.companyId === user.companyId && a.date === ledgerDate), [state.attendance, user.companyId, isSuper, ledgerDate]);
   const companySites = useMemo(() => isSuper ? state.sites : state.sites.filter(s => s.companyId === user.companyId), [state.sites, user.companyId, isSuper]);
 
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
@@ -36,14 +38,14 @@ const AttendancePanel: React.FC<Props> = ({ user, state, markAttendance, addSite
   const [overtimeHours, setOvertimeHours] = useState<number>(0);
   const [isLocating, setIsLocating] = useState(true);
 
-  // Manual Entry State
   const [isManualMode, setIsManualMode] = useState(false);
   const [manualData, setManualData] = useState({ userId: '', siteId: '', date: today, checkIn: '09:00', checkOut: '18:00', ot: 0 });
 
-  // Site Management State
   const [showSiteManager, setShowSiteManager] = useState(false);
   const [newSite, setNewSite] = useState({ name: '', address: '', lat: 0, lng: 0 });
   const [isResolving, setIsResolving] = useState(false);
+
+  const [editingRecord, setEditingRecord] = useState<Attendance | null>(null);
 
   useEffect(() => {
     if (!navigator.geolocation) {
@@ -130,6 +132,24 @@ const AttendancePanel: React.FC<Props> = ({ user, state, markAttendance, addSite
     }
   };
 
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingRecord) return;
+    try {
+      await updateAttendance(editingRecord.id, {
+        date: editingRecord.date,
+        checkIn: editingRecord.checkIn,
+        checkOut: editingRecord.checkOut,
+        siteId: editingRecord.siteId,
+        overtimeHours: editingRecord.overtimeHours
+      });
+      alert("Attendance record updated successfully.");
+      setEditingRecord(null);
+    } catch (err: any) {
+      alert("Update failed: " + err.message);
+    }
+  };
+
   const handleAddSite = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSite.name.trim() || !newSite.lat || !newSite.lng) return alert("Fill all site details.");
@@ -149,7 +169,6 @@ const AttendancePanel: React.FC<Props> = ({ user, state, markAttendance, addSite
 
   return (
     <div className="space-y-10">
-      {/* 1. Operation Punch Section for Field Staff */}
       {!isSuper && user.role === UserRole.EMPLOYEE && (
         <div className="bg-white p-8 md:p-12 rounded-[2.5rem] shadow-sm border border-gray-100 text-center max-w-xl mx-auto">
           <h2 className="text-3xl font-black text-blue-900 mb-2 uppercase tracking-tighter leading-none">Operation Punch</h2>
@@ -215,7 +234,6 @@ const AttendancePanel: React.FC<Props> = ({ user, state, markAttendance, addSite
         </div>
       )}
 
-      {/* Manual Entry Form for Management & Supervisors */}
       {(isAdmin || isSupervisor || isSuper) && (
         <div className="space-y-6">
           <div className="bg-white rounded-[2rem] border border-gray-100 overflow-hidden shadow-sm">
@@ -224,7 +242,11 @@ const AttendancePanel: React.FC<Props> = ({ user, state, markAttendance, addSite
                    <h3 className="text-lg font-black text-blue-900 uppercase tracking-tighter leading-none">Attendance Ledger Console</h3>
                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-2">Centralized Site Deployment Control</p>
                 </div>
-                <div className="flex space-x-2">
+                <div className="flex flex-wrap gap-2">
+                  <div className="flex items-center bg-white border border-gray-200 rounded-xl px-4 py-1">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-gray-400 mr-2">Filter Date:</span>
+                    <input type="date" className="bg-transparent text-xs font-bold outline-none border-none p-0" value={ledgerDate} onChange={e => setLedgerDate(e.target.value)} />
+                  </div>
                   <button 
                     onClick={() => setShowSiteManager(!showSiteManager)}
                     className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg transition-all ${showSiteManager ? 'bg-orange-500 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}
@@ -348,7 +370,7 @@ const AttendancePanel: React.FC<Props> = ({ user, state, markAttendance, addSite
           <div className="p-8 border-b border-gray-50 flex justify-between items-center bg-gray-50/30">
             <div>
               <h3 className="font-black uppercase tracking-tighter text-blue-900 text-lg leading-none">Global Attendance Ledger</h3>
-              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-2">Active Multi-Project Telemetry • {today}</p>
+              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-2">Active Multi-Project Telemetry • {ledgerDate}</p>
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -369,7 +391,7 @@ const AttendancePanel: React.FC<Props> = ({ user, state, markAttendance, addSite
                    const isGpsVerified = !!(a.lat && a.lng);
 
                    return (
-                     <tr key={i} className="hover:bg-gray-50/30 transition-colors group">
+                     <tr key={a.id || i} className="hover:bg-gray-50/30 transition-colors group">
                         <td className="px-8 py-6">
                           <div className="font-black text-gray-800 text-xs uppercase tracking-tight">{employee?.name || 'Unknown'}</div>
                           <div className="text-[8px] text-gray-400 font-bold uppercase tracking-widest mt-1">ID: {a.userId.split('-').pop()}</div>
@@ -389,7 +411,7 @@ const AttendancePanel: React.FC<Props> = ({ user, state, markAttendance, addSite
                           ) : '--'}
                         </td>
                         <td className="px-8 py-6 text-right">
-                          <div className="flex flex-col items-end">
+                          <div className="flex items-center justify-end space-x-3">
                             {isGpsVerified ? (
                               <div className="flex items-center space-x-1">
                                 <span className="px-3 py-1 bg-green-50 text-green-700 rounded-xl text-[8px] font-black uppercase border border-green-100">Satellite Verified</span>
@@ -397,6 +419,13 @@ const AttendancePanel: React.FC<Props> = ({ user, state, markAttendance, addSite
                             ) : (
                               <span className="px-3 py-1 bg-gray-50 text-gray-400 rounded-xl text-[8px] font-black uppercase border border-gray-100">Manual Override</span>
                             )}
+                            <button 
+                              onClick={() => setEditingRecord(a)}
+                              className="p-2 text-gray-300 hover:text-blue-600 transition-colors"
+                              title="Edit Attendance"
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                            </button>
                           </div>
                         </td>
                      </tr>
@@ -404,11 +433,89 @@ const AttendancePanel: React.FC<Props> = ({ user, state, markAttendance, addSite
                 })}
                 {companyAttendance.length === 0 && (
                    <tr>
-                      <td colSpan={5} className="px-8 py-20 text-center text-gray-300 font-bold italic text-xs uppercase tracking-widest">No workforce movement detected in current cycle.</td>
+                      <td colSpan={5} className="px-8 py-20 text-center text-gray-300 font-bold italic text-xs uppercase tracking-widest">No workforce movement detected for {ledgerDate}.</td>
                    </tr>
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Editing Modal */}
+      {editingRecord && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-xl p-10 relative">
+             <div className="absolute top-0 left-0 w-full h-1.5 bg-blue-600"></div>
+             <button onClick={() => setEditingRecord(null)} className="absolute top-8 right-8 text-gray-300 hover:text-red-500 transition-colors">
+               <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
+             </button>
+
+             <h3 className="text-2xl font-black text-blue-900 uppercase tracking-tighter mb-2">Edit Entry Record</h3>
+             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-8">Personnel: {state.users.find(u => u.id === editingRecord.userId)?.name}</p>
+
+             <form onSubmit={handleEditSubmit} className="space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Site</label>
+                    <select 
+                      className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl font-bold text-xs"
+                      value={editingRecord.siteId || ''}
+                      onChange={e => setEditingRecord({...editingRecord, siteId: e.target.value})}
+                    >
+                      <option value="">No Site</option>
+                      {companySites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Record Date</label>
+                    <input 
+                      type="date"
+                      className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl font-bold text-xs"
+                      value={editingRecord.date}
+                      onChange={e => setEditingRecord({...editingRecord, date: e.target.value})}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Check In</label>
+                    <input 
+                      type="text"
+                      placeholder="09:00:00"
+                      className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl font-bold text-xs"
+                      value={editingRecord.checkIn}
+                      onChange={e => setEditingRecord({...editingRecord, checkIn: e.target.value})}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Check Out</label>
+                    <input 
+                      type="text"
+                      placeholder="18:00:00"
+                      className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl font-bold text-xs"
+                      value={editingRecord.checkOut || ''}
+                      onChange={e => setEditingRecord({...editingRecord, checkOut: e.target.value})}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">OT Hours</label>
+                    <input 
+                      type="number"
+                      step="0.5"
+                      className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl font-bold text-xs"
+                      value={editingRecord.overtimeHours || 0}
+                      onChange={e => setEditingRecord({...editingRecord, overtimeHours: parseFloat(e.target.value) || 0})}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-4 pt-4">
+                  <button type="submit" className="flex-1 bg-blue-600 text-white py-4 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-xl">Confirm Override</button>
+                  <button type="button" onClick={() => setEditingRecord(null)} className="px-8 bg-gray-100 text-gray-400 py-4 rounded-xl font-black uppercase text-[10px] tracking-widest">Cancel</button>
+                </div>
+             </form>
           </div>
         </div>
       )}

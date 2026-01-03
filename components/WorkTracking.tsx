@@ -137,21 +137,38 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
   const companyEmployees = useMemo(() => state.users.filter(u => u.companyId === user.companyId), [state.users, user.companyId]);
   const companySupervisors = useMemo(() => companyEmployees.filter(u => u.role === UserRole.SUPERVISOR), [companyEmployees]);
   
-  const filteredPersonnelList = useMemo(() => {
-    if (!filterSupervisor) return companyEmployees.filter(u => u.role === UserRole.EMPLOYEE);
-    return companyEmployees.filter(u => u.supervisorId === filterSupervisor);
-  }, [companyEmployees, filterSupervisor]);
-
+  // ROLE-BASED AUTHENTICATED LOGIC: Filter dropdown based on permissions
+  const filterablePersonnel = useMemo(() => {
+    let members = companyEmployees.filter(u => u.role === UserRole.EMPLOYEE || u.role === UserRole.SUPERVISOR);
+    
+    // If authenticated as a supervisor, only show self and people reporting to me
+    if (user.role === UserRole.SUPERVISOR) {
+      members = members.filter(m => m.id === user.id || m.supervisorId === user.id);
+    }
+    
+    return members.sort((a, b) => a.name.localeCompare(b.name));
+  }, [companyEmployees, user.id, user.role]);
+  
   const filteredLogs = useMemo(() => {
     return state.workLogs.filter(log => {
       const isCompanyMatch = log.companyId === user.companyId;
       if (!isCompanyMatch) return false;
 
+      // Basic Authentication logic for employees: Can only see their own logs
       if (user.role === UserRole.EMPLOYEE && log.userId !== user.id) return false;
 
-      const dateToCompare = log.installationDate || log.date;
-      const isAfterStart = startDate ? dateToCompare >= startDate : true;
-      const isBeforeEnd = endDate ? dateToCompare <= endDate : true;
+      // Supervisors can only see logs for people who report to them or themselves
+      if (user.role === UserRole.SUPERVISOR) {
+        const logUser = state.users.find(u => u.id === log.userId);
+        const isSelf = log.userId === user.id;
+        const reportsToMe = logUser?.supervisorId === user.id;
+        if (!isSelf && !reportsToMe) return false;
+      }
+
+      // DATE FILTERING LOGIC
+      const activityDate = log.installationDate || log.date;
+      const isAfterStart = startDate ? activityDate >= startDate : true;
+      const isBeforeEnd = endDate ? activityDate <= endDate : true;
 
       const logUser = state.users.find(u => u.id === log.userId);
       const isSupervisorMatch = filterSupervisor ? (
@@ -182,7 +199,6 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
 
   const totalMeters = useMemo(() => filteredLogs.reduce((sum, l) => sum + l.meters, 0), [filteredLogs]);
 
-  // FIX: Added derived state to check if any filters are active
   const hasActiveFilters = useMemo(() => {
     return !!(startDate || endDate || searchQuery || filterEmployee || filterSupervisor || filterWorkType || filterSite);
   }, [startDate, endDate, searchQuery, filterEmployee, filterSupervisor, filterWorkType, filterSite]);
@@ -195,6 +211,29 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
     setFilterSupervisor('');
     setFilterWorkType('');
     setFilterSite('');
+  };
+
+  const applyQuickRange = (range: 'today' | 'week' | 'month' | 'lastMonth') => {
+    const now = new Date();
+    const end = now.toISOString().split('T')[0];
+    let start = '';
+
+    if (range === 'today') {
+      start = end;
+    } else if (range === 'week') {
+      start = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0];
+    } else if (range === 'month') {
+      start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+    } else if (range === 'lastMonth') {
+      const firstOfLast = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const lastOfLast = new Date(now.getFullYear(), now.getMonth(), 0);
+      setStartDate(firstOfLast.toISOString().split('T')[0]);
+      setEndDate(lastOfLast.toISOString().split('T')[0]);
+      return;
+    }
+    
+    setStartDate(start);
+    setEndDate(end);
   };
 
   const exportToCSV = () => {
@@ -218,6 +257,7 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      {/* Sidebar: Logging Form */}
       <div className="lg:col-span-1">
         <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 sticky top-4">
           <h3 className="text-lg font-black text-blue-900 uppercase tracking-tighter mb-6 flex items-center">
@@ -313,13 +353,17 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
           </form>
         </div>
       </div>
+
+      {/* Main: Work History & Filters */}
       <div className="lg:col-span-3 space-y-6">
         <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
-          <div className="flex flex-col space-y-6">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex flex-col space-y-8">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
               <div className="relative flex-1">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg></span>
-                <input type="text" placeholder="Search work types, staff, or sites..." className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm focus:border-blue-500 outline-none transition-all font-medium" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                </span>
+                <input type="text" placeholder="Search work types, staff, or sites..." className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl text-sm focus:border-blue-500 outline-none transition-all font-bold text-blue-900" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
               </div>
               <div className="flex items-center space-x-2 shrink-0">
                  {hasActiveFilters && (
@@ -328,17 +372,90 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
                  <button onClick={exportToCSV} className="px-5 py-2.5 bg-orange-50 text-orange-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-orange-100 transition-all border border-orange-100">Export CSV</button>
               </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
-              <div><label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">From</label><input type="date" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-xs font-bold" value={startDate} onChange={(e) => setStartDate(e.target.value)} /></div>
-              <div><label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">To</label><input type="date" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-xs font-bold" value={endDate} onChange={(e) => setEndDate(e.target.value)} /></div>
-              <div><label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Work Site</label><select className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-xs font-bold" value={filterSite} onChange={(e) => setFilterSite(e.target.value)}><option value="">All Sites</option>{companySites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
+
+            <div className="space-y-4">
+              <div className="flex items-center space-x-4">
+                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Quick Temporal Filters:</p>
+                 <div className="flex gap-2">
+                    <button onClick={() => applyQuickRange('today')} className="px-3 py-1 bg-gray-100 text-gray-600 rounded-lg text-[8px] font-black uppercase hover:bg-blue-600 hover:text-white transition-colors">Today</button>
+                    <button onClick={() => applyQuickRange('week')} className="px-3 py-1 bg-gray-100 text-gray-600 rounded-lg text-[8px] font-black uppercase hover:bg-blue-600 hover:text-white transition-colors">Last 7 Days</button>
+                    <button onClick={() => applyQuickRange('month')} className="px-3 py-1 bg-gray-100 text-gray-600 rounded-lg text-[8px] font-black uppercase hover:bg-blue-600 hover:text-white transition-colors">This Month</button>
+                    <button onClick={() => applyQuickRange('lastMonth')} className="px-3 py-1 bg-gray-100 text-gray-600 rounded-lg text-[8px] font-black uppercase hover:bg-orange-600 hover:text-white transition-colors">Last Month</button>
+                 </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+                <div className="relative">
+                  <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Activity From</label>
+                  <input 
+                    type="date" 
+                    className={`w-full px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${startDate ? 'bg-blue-50 border-blue-400 text-blue-900' : 'bg-gray-50 border-gray-100 text-gray-700'} border outline-none`} 
+                    value={startDate} 
+                    onChange={(e) => setStartDate(e.target.value)} 
+                  />
+                </div>
+                <div>
+                  <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Activity To</label>
+                  <input 
+                    type="date" 
+                    className={`w-full px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${endDate ? 'bg-blue-50 border-blue-400 text-blue-900' : 'bg-gray-50 border-gray-100 text-gray-700'} border outline-none`} 
+                    value={endDate} 
+                    onChange={(e) => setEndDate(e.target.value)} 
+                  />
+                </div>
+                {user.role !== UserRole.EMPLOYEE && (
+                  <>
+                    <div>
+                      <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Personnel Filter</label>
+                      <select className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-xs font-bold" value={filterEmployee} onChange={(e) => setFilterEmployee(e.target.value)}>
+                        <option value="">All Viewable Personnel</option>
+                        {filterablePersonnel.map(u => (
+                          <option key={u.id} value={u.id}>
+                            {u.name} {u.id === user.id ? '(Me)' : `(${u.role === UserRole.SUPERVISOR ? 'Sup' : 'Emp'})`}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </>
+                )}
+                <div>
+                  <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Classification</label>
+                  <select className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-xs font-bold" value={filterWorkType} onChange={(e) => setFilterWorkType(e.target.value)}>
+                    <option value="">All Types</option>
+                    {Object.values(WorkType).map(wt => <option key={wt} value={wt}>{wt}</option>)}
+                  </select>
+                </div>
+                {user.role !== UserRole.EMPLOYEE && (
+                  <div>
+                    <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Supervisor Hub</label>
+                    <select className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-xs font-bold" value={filterSupervisor} onChange={(e) => setFilterSupervisor(e.target.value)}>
+                      <option value="">All Managers</option>
+                      {companySupervisors.map(u => <option key={u.id} value={u.id}>{u.name} {u.id === user.id ? '(Me)' : ''}</option>)}
+                    </select>
+                  </div>
+                )}
+                <div>
+                  <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Work Site</label>
+                  <select className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-xs font-bold" value={filterSite} onChange={(e) => setFilterSite(e.target.value)}>
+                    <option value="">All Project Sites</option>
+                    {companySites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </div>
+              </div>
             </div>
           </div>
         </div>
+
         <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden flex flex-col">
           <div className="p-8 border-b border-gray-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
-            <div><h3 className="text-xl font-black text-blue-900 uppercase tracking-tighter">Operational History</h3><p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">Verified Project Telemetry</p></div>
-            <div className="flex flex-col items-end"><span className="text-3xl font-black text-green-600 tracking-tighter">{totalMeters.toLocaleString()}</span><span className="text-[10px] text-gray-400 font-black uppercase tracking-widest mt-1">Total Quantity</span></div>
+            <div>
+              <h3 className="text-xl font-black text-blue-900 uppercase tracking-tighter leading-none">Operational Registry</h3>
+              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-2">Verified Progress Telemetry</p>
+            </div>
+            <div className="flex flex-col items-end">
+              <span className="text-3xl font-black text-green-600 tracking-tighter leading-none">{totalMeters.toLocaleString()}</span>
+              <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest mt-2">Units in Selected Range (Mtrs)</span>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left">
@@ -355,26 +472,56 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
                   const emp = state.users.find(u => u.id === log.userId);
                   const site = companySites.find(s => s.id === log.siteId);
                   const linkedTask = state.tasks.find(t => t.id === log.taskId);
+                  const isOwnLog = log.userId === user.id;
 
                   return (
-                    <tr key={log.id || i} className="hover:bg-gray-50/50 transition-all group">
+                    <tr key={log.id || i} className={`hover:bg-gray-50/50 transition-all group ${isOwnLog ? 'bg-blue-50/10' : ''}`}>
                       <td className="px-8 py-6">
-                        <div className="font-black text-gray-800 uppercase text-xs tracking-tight">{emp?.name || 'Unknown'}</div>
-                        <div className="flex items-center space-x-1.5 mt-1">
+                        <button 
+                          onClick={() => {
+                            // Only allow filtering if user has permission to see that personnel
+                            if (user.role === UserRole.ADMIN || user.role === UserRole.SUPER_ADMIN || (user.role === UserRole.SUPERVISOR && (emp?.id === user.id || emp?.supervisorId === user.id))) {
+                              setFilterEmployee(log.userId);
+                            }
+                          }}
+                          className={`font-black uppercase text-xs tracking-tight leading-none mb-1.5 transition-colors block text-left ${isOwnLog ? 'text-blue-700' : 'text-gray-800 hover:text-blue-600'}`}
+                          title={isOwnLog ? "This is your entry" : "Click to audit this employee"}
+                        >
+                          {emp?.name || 'Unknown'} {isOwnLog ? '(You)' : ''}
+                        </button>
+                        <div className="flex items-center space-x-1.5">
                           <span className="w-2 h-2 bg-orange-500 rounded-full"></span>
-                          <span className="text-[9px] font-black text-orange-600 uppercase tracking-widest">{site?.name || 'General'}</span>
+                          <span className="text-[9px] font-black text-orange-600 uppercase tracking-widest leading-none">{site?.name || 'General'}</span>
                         </div>
                       </td>
                       <td className="px-8 py-6">
-                        <div className="text-xs font-black text-blue-600 uppercase tracking-widest">{log.workType}</div>
-                        <div className="text-[10px] text-orange-600 font-black uppercase tracking-widest mt-0.5">{log.subCategory}</div>
-                        {linkedTask && <div className="mt-1 px-2 py-0.5 bg-blue-100 text-blue-700 rounded-md text-[8px] font-black uppercase inline-block">TASK: {linkedTask.name}</div>}
+                        <div className="text-xs font-black text-blue-900 uppercase tracking-widest mb-1">{log.workType}</div>
+                        <div className="text-[9px] text-gray-400 font-black uppercase tracking-widest leading-none">{log.subCategory}</div>
+                        {linkedTask && (
+                          <div className="mt-2 px-2 py-0.5 bg-blue-50 text-blue-600 rounded-md text-[7px] font-black uppercase inline-block border border-blue-100">MILESTONE: {linkedTask.name}</div>
+                        )}
                       </td>
-                      <td className="px-8 py-6 text-center"><span className="text-lg font-black text-green-700 tracking-tighter">{log.meters}</span></td>
-                      <td className="px-8 py-6 text-right"><div className="text-xs font-black text-gray-400 uppercase">{log.installationDate}</div></td>
+                      <td className="px-8 py-6 text-center">
+                        <span className="text-xl font-black text-green-700 tracking-tighter">{log.meters}</span>
+                        <p className="text-[8px] font-black text-gray-300 uppercase tracking-widest mt-0.5">Mtrs</p>
+                      </td>
+                      <td className="px-8 py-6 text-right">
+                        <div className="text-[10px] font-black text-gray-800 uppercase tracking-tight">{log.installationDate}</div>
+                        <div className="text-[8px] text-gray-400 font-bold uppercase tracking-widest mt-1">LOGGED: {log.date}</div>
+                      </td>
                     </tr>
                   );
                 })}
+                {filteredLogs.length === 0 && (
+                   <tr>
+                      <td colSpan={4} className="px-8 py-20 text-center text-gray-300 font-bold italic text-xs uppercase tracking-widest flex flex-col items-center">
+                         <span>No matching logs found in registry.</span>
+                         {hasActiveFilters && (
+                            <button onClick={clearFilters} className="mt-4 text-blue-600 hover:underline font-black uppercase text-[10px]">Clear all filters</button>
+                         )}
+                      </td>
+                   </tr>
+                )}
               </tbody>
             </table>
           </div>

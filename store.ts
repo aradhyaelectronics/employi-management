@@ -3,7 +3,7 @@ import React from 'react';
 import { 
   AppState, User, Company, UserRole, UserStatus, RequestStatus, 
   WorkLog, FinancialRequest, MonthlySalarySlip, 
-  PaymentStatus, Project, Task, LeaveRequest, SalaryType, SubscriptionPlan 
+  PaymentStatus, Project, Task, LeaveRequest, SalaryType, SubscriptionPlan, Attendance 
 } from './types';
 
 const STORAGE_KEY = 'pragati_data_v2';
@@ -93,7 +93,6 @@ export const useStore = () => {
       const date = manualDate || new Date().toISOString().split('T')[0];
       const time = manualTime || new Date().toLocaleTimeString();
       
-      // 1. Leave Check
       const onLeave = state.leaves.some(l => 
         l.userId === uid && 
         l.status === RequestStatus.APPROVED && 
@@ -101,7 +100,6 @@ export const useStore = () => {
       );
       if (onLeave && type === 'IN' && !manualDate) throw new Error("Attendance blocked: User is on approved leave.");
 
-      // 2. Duplicate Check (Only one punch-in per day allowed)
       const existingRecord = state.attendance.find(a => a.userId === uid && a.date === date);
       if (type === 'IN' && existingRecord) {
         throw new Error(`Duplicate Entry: Attendance for ${date} already exists in the system.`);
@@ -114,6 +112,12 @@ export const useStore = () => {
           return { ...p, attendance: p.attendance.map(a => (a.userId === uid && a.date === date && !a.checkOut) ? { ...a, checkOut: time, overtimeHours: ot } : a) };
         }
       });
+    },
+    updateAttendance: async (id: string, updates: Partial<Attendance>) => {
+      updateState(p => ({
+        ...p,
+        attendance: p.attendance.map(a => a.id === id ? { ...a, ...updates } : a)
+      }));
     },
     addWorkLog: async (log: any) => updateState(p => ({ ...p, workLogs: [...p.workLogs, { ...log, id: `w-${Date.now()}` }] })),
     updateUserPin: async (id: string, pin: string) => updateState(p => ({ ...p, users: p.users.map(u => u.id === id ? { ...u, pin } : u) })),
@@ -136,6 +140,20 @@ export const useStore = () => {
       updateState(p => ({ ...p, subscriptionPlans: p.subscriptionPlans.map(sp => sp.id === plan.id ? plan : sp) }));
     },
     
+    addManualSalarySlip: async (slip: Omit<MonthlySalarySlip, 'id' | 'generatedDate'>) => {
+      const exists = state.salarySlips.some(s => s.userId === slip.userId && s.month === slip.month && s.year === slip.year);
+      if (exists) throw new Error("A salary slip already exists for this personnel in the selected period.");
+
+      updateState(p => ({
+        ...p,
+        salarySlips: [...p.salarySlips, {
+          ...slip,
+          id: `slip-${slip.userId}-${Date.now()}`,
+          generatedDate: new Date().toISOString()
+        }]
+      }));
+    },
+
     generateMonthlySlips: async (cid: string, month: number, year: number) => {
       updateState(p => {
         const companyUsers = p.users.filter(u => u.companyId === cid && u.role !== UserRole.SUPER_ADMIN);
