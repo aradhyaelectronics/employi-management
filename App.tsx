@@ -21,6 +21,7 @@ const SESSION_KEY = 'employeemanagement_session_prod';
 const App: React.FC = () => {
   const { 
     state, 
+    authenticate,
     addUser, 
     updateUser,
     removeUser,
@@ -154,27 +155,11 @@ const App: React.FC = () => {
     setIsAuthenticating(true);
     setAuthError(null);
 
-    await new Promise(r => setTimeout(r, 600));
-
-    const rawId = formData.identifier.trim();
-    const inputIdentifier = rawId.toLowerCase();
-    const cleanInputId = rawId.replace(/\s+/g, ''); 
-    const secret = formData.secret.trim();
+    // Snappy feedback delay
+    await new Promise(r => setTimeout(r, 150));
 
     if (isLogin) {
-      const user = state.users.find(u => {
-        const storedEmail = (u.email || '').trim().toLowerCase();
-        const storedMobile = (u.mobile || '').trim();
-        
-        const idMatch = 
-          storedEmail === inputIdentifier || 
-          storedEmail === cleanInputId ||
-          storedMobile === cleanInputId || 
-          storedMobile === inputIdentifier;
-
-        const secretMatch = u.password === secret || u.pin === secret;
-        return idMatch && secretMatch;
-      });
+      const user = authenticate(formData.identifier, formData.secret);
 
       if (user) {
         if (user.status === UserStatus.PENDING) {
@@ -198,7 +183,7 @@ const App: React.FC = () => {
           const superAdmin = await addUser({ 
             name: formData.name.trim(), 
             email: formData.identifier.trim().toLowerCase(), 
-            password: secret, 
+            password: formData.secret.trim(), 
             role: UserRole.SUPER_ADMIN, 
             companyId: 'SYSTEM',
             status: UserStatus.ACTIVE 
@@ -209,15 +194,15 @@ const App: React.FC = () => {
           const admin = await addUser({ 
             name: formData.name.trim(), 
             email: formData.identifier.trim().toLowerCase(), 
-            password: secret, 
+            password: formData.secret.trim(), 
             role: UserRole.ADMIN, 
             companyId: company.id,
             status: UserStatus.ACTIVE 
           });
           setCurrentUser(admin);
         }
-      } catch (err) {
-        setAuthError('REGISTRATION FAILED.');
+      } catch (err: any) {
+        setAuthError(err.message || 'REGISTRATION FAILED.');
       }
     }
     setIsAuthenticating(false);
@@ -233,7 +218,7 @@ const App: React.FC = () => {
            </h2>
            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mt-2">Mobile or Email Login Enabled</p>
         </div>
-        {authError && <div className="mb-4 bg-red-50 p-3 rounded-xl border border-red-100 text-red-600 text-[10px] font-black uppercase text-center leading-tight animate-pulse">{authError}</div>}
+        {authError && <div className="mb-4 bg-red-50 p-3 rounded-xl border border-red-100 text-red-600 text-[10px] font-black uppercase text-center leading-tight animate-in shake duration-300">{authError}</div>}
         <form onSubmit={handleAuth} className="space-y-4">
           {!isLogin && (
             <div className="space-y-4">
@@ -249,10 +234,13 @@ const App: React.FC = () => {
             </button>
           </div>
           <button type="submit" disabled={isAuthenticating} className={`w-full py-4 text-white rounded-[1.2rem] font-black uppercase text-[10px] tracking-[0.2em] shadow-xl ${isSystemLogin ? 'bg-slate-800' : 'bg-orange-600 hover:bg-orange-700'} transition-all active:scale-95`}>
-            {isAuthenticating ? 'Authenticating...' : (isLogin ? 'Access Console' : 'Enroll Enterprise')}
+            {isAuthenticating ? 'Verifying...' : (isLogin ? 'Access Console' : 'Enroll Enterprise')}
           </button>
         </form>
-        <button onClick={() => setIsLogin(!isLogin)} className="w-full mt-6 text-gray-400 font-black text-[9px] uppercase tracking-widest hover:text-blue-900 transition-colors">{isLogin ? 'Create New Account' : 'Return to Login'}</button>
+        <div className="mt-8 pt-6 border-t border-gray-50 flex flex-col gap-2">
+           <button onClick={() => setIsLogin(!isLogin)} className="w-full text-gray-400 font-black text-[9px] uppercase tracking-widest hover:text-blue-900 transition-colors">{isLogin ? 'Create New Account' : 'Return to Login'}</button>
+           <button onClick={() => { setIsSystemLogin(!isSystemLogin); setIsLogin(true); }} className="w-full text-gray-300 font-black text-[8px] uppercase tracking-[0.4em] hover:text-slate-900 transition-colors">Internal Ops Access</button>
+        </div>
       </div>
     </div>
   );

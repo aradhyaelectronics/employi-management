@@ -6,8 +6,18 @@ import {
   PaymentStatus, Project, Task, LeaveRequest, SalaryType, SubscriptionPlan, Attendance 
 } from './types';
 
-const STORAGE_KEY = 'pragati_data_v2';
+const STORAGE_KEY = 'employeemanagement_data_v3';
 const STANDARD_SHIFT_HOURS = 8;
+
+// Robust normalization for mobile numbers
+const normalizeMobile = (num: string | undefined): string => {
+  if (!num) return '';
+  // Remove all non-numeric characters (handles spaces, +, -, etc)
+  const cleaned = num.replace(/\D/g, '');
+  // If it's an Indian number with 91 prefix, strip it for consistent local comparison
+  if (cleaned.length === 12 && cleaned.startsWith('91')) return cleaned.substring(2);
+  return cleaned;
+};
 
 const getInitialState = (): AppState => {
   try {
@@ -19,17 +29,19 @@ const getInitialState = (): AppState => {
         projects: parsed.projects || [],
         tasks: parsed.tasks || [],
         leaves: parsed.leaves || [],
-        version: '3.6.0-deductions-engine'
+        version: '4.0.0-robust-auth'
       };
     }
-  } catch (e) {}
+  } catch (e) {
+    console.error("Store recovery failed, initializing fresh state.");
+  }
   return {
     users: [], companies: [], sites: [], projects: [], tasks: [], leaves: [],
     attendance: [], workLogs: [], requests: [], subscriptionPlans: [
       { id: 'p-free', name: 'Standard (Free)', price: 0, durationDays: 365, userLimit: 5, features: ['Basic Attendance', 'Work Logs', 'Manual Payroll'] },
       { id: 'p-pro', name: 'Enterprise Pro', price: 4999, durationDays: 30, userLimit: 50, features: ['Advanced Payroll', 'Geofencing', 'Task Management', 'Leave Portal', 'AI Audits'] }
     ],
-    salarySlips: [], version: '3.6.0-deductions-engine'
+    salarySlips: [], version: '4.0.0-robust-auth'
   };
 };
 
@@ -62,11 +74,36 @@ export const useStore = () => {
 
   return {
     state,
+    // Centralized Auth Logic
+    authenticate: (identifier: string, secret: string): User | null => {
+      const cleanId = identifier.trim().toLowerCase();
+      const cleanMobileId = normalizeMobile(cleanId);
+      const cleanSecret = secret.trim();
+
+      return state.users.find(u => {
+        const storedEmail = (u.email || '').trim().toLowerCase();
+        const storedMobile = normalizeMobile(u.mobile);
+        
+        const isEmailMatch = storedEmail === cleanId;
+        const isMobileMatch = cleanMobileId !== '' && storedMobile === cleanMobileId;
+        const isSecretMatch = u.password === cleanSecret || u.pin === cleanSecret;
+
+        return (isEmailMatch || isMobileMatch) && isSecretMatch;
+      }) || null;
+    },
+
     addUser: async (u: any) => {
-      const cleanMobile = (u.mobile || '').replace(/\s+/g, '');
+      const cleanMobile = u.mobile ? u.mobile.trim() : '';
+      const normMobile = normalizeMobile(cleanMobile);
       const cleanEmail = (u.email || '').trim().toLowerCase();
-      const exists = state.users.find(ex => (cleanMobile && ex.mobile === cleanMobile) || (cleanEmail && ex.email === cleanEmail));
-      if (exists) throw new Error("Personnel Identity Conflict: Mobile or Email already in registry.");
+      
+      const exists = state.users.find(ex => {
+        if (cleanEmail && ex.email.toLowerCase() === cleanEmail) return true;
+        if (normMobile && normalizeMobile(ex.mobile) === normMobile) return true;
+        return false;
+      });
+
+      if (exists) throw new Error("ID Conflict: Email or Mobile already registered in the cloud.");
 
       const newUser = { 
         status: UserStatus.PENDING, 
