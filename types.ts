@@ -1,0 +1,176 @@
+
+export enum UserRole {
+  SUPER_ADMIN = 'SUPER_ADMIN',
+  ADMIN = 'ADMIN',
+  SUPERVISOR = 'SUPERVISOR',
+  EMPLOYEE = 'EMPLOYEE'
+}
+
+export enum SalaryType {
+  MONTHLY_FIXED = 'MONTHLY_FIXED',
+  DAILY_WAGE = 'DAILY_WAGE'
+}
+
+export enum PaymentStatus {
+  UNPAID = 'UNPAID',
+  PAID = 'PAID'
+}
+
+export enum LeaveType {
+  CASUAL = 'CASUAL',
+  SICK = 'SICK',
+  PAID = 'PAID',
+  UNPAID = 'UNPAID'
+}
+
+export enum RequestStatus {
+  PENDING = 'PENDING',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED'
+}
+
+export enum CableType {
+  CAT6 = 'Cate 6',
+  FLEXIBLE = 'Flexible Cable',
+  ARMOUR = 'Armour Cable',
+  FIBER = 'Fiber Optic',
+  COPPER = 'Copper Cable'
+}
+
+export interface Project {
+  id: string;
+  companyId: string;
+  name: string;
+  description: string;
+  startDate: string;
+  endDate: string;
+  status: 'ACTIVE' | 'COMPLETED' | 'ON_HOLD';
+}
+
+export interface Task {
+  id: string;
+  projectId: string;
+  assignedTo: string; // userId
+  name: string;
+  status: 'TODO' | 'IN_PROGRESS' | 'DONE';
+}
+
+export interface LeaveRequest {
+  id: string;
+  userId: string;
+  companyId: string;
+  type: LeaveType;
+  fromDate: string;
+  toDate: string;
+  reason: string;
+  status: RequestStatus;
+  requestDate: string;
+}
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  companyId: string;
+  password?: string;
+  pin?: string;
+  supervisorId?: string;
+  salaryType?: SalaryType;
+  salaryAmount?: number;
+  overtimeRate?: number;
+}
+
+export interface Company {
+  id: string;
+  name: string;
+  createdAt: string;
+  subscriptionPlanId?: string;
+  subscriptionExpiry?: string;
+}
+
+export interface Site {
+  id: string;
+  companyId: string;
+  name: string;
+  lat: number;
+  lng: number;
+}
+
+export interface Attendance {
+  id: string;
+  userId: string;
+  companyId: string;
+  date: string;
+  checkIn: string;
+  checkOut?: string;
+  overtimeHours?: number;
+  lat?: number;
+  lng?: number;
+}
+
+export interface WorkLog {
+  id: string;
+  userId: string;
+  companyId: string;
+  date: string;
+  installationDate: string;
+  taskId?: string; // Linked to formal tasks
+  cableType: CableType;
+  cableSize: string;
+  meters: number;
+  description: string;
+}
+
+export interface FinancialRequest {
+  id: string;
+  userId: string;
+  companyId: string;
+  amount: number;
+  type: 'ADVANCE' | 'SALARY';
+  status: RequestStatus;
+  date: string;
+  description: string;
+}
+
+export interface MonthlySalarySlip {
+  id: string;
+  userId: string;
+  companyId: string;
+  month: number;
+  year: number;
+  baseAmount: number;
+  overtimeAmount: number;
+  overtimeHours: number;
+  advanceDeduction: number; 
+  totalAmount: number; 
+  status: PaymentStatus;
+  generatedDate: string;
+}
+
+/**
+ * SubscriptionPlan interface added to fix missing export error in components/SubscriptionCenter.tsx
+ */
+export interface SubscriptionPlan {
+  id: string;
+  name: string;
+  price: number;
+  durationDays: number;
+  userLimit: number;
+  features: string[];
+}
+
+export interface AppState {
+  users: User[];
+  companies: Company[];
+  sites: Site[];
+  projects: Project[];
+  tasks: Task[];
+  leaves: LeaveRequest[];
+  attendance: Attendance[];
+  workLogs: WorkLog[];
+  requests: FinancialRequest[];
+  subscriptionPlans: SubscriptionPlan[];
+  salarySlips: MonthlySalarySlip[];
+  version: string;
+}
