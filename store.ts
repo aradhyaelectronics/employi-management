@@ -12,11 +12,24 @@ const STANDARD_SHIFT_HOURS = 8;
 // Robust normalization for mobile numbers
 const normalizeMobile = (num: string | undefined): string => {
   if (!num) return '';
-  // Remove all non-numeric characters (handles spaces, +, -, etc)
+  // Remove all non-numeric characters
   const cleaned = num.replace(/\D/g, '');
-  // If it's an Indian number with 91 prefix, strip it for consistent local comparison
+  // Strip Indian 91 prefix if present for consistent local matching
   if (cleaned.length === 12 && cleaned.startsWith('91')) return cleaned.substring(2);
   return cleaned;
+};
+
+// Default Master Admin used for system recovery and first-time setup
+const MASTER_ADMIN: User = {
+  id: 'u-root-001',
+  name: 'Pragati Master',
+  email: 'admin@pragati.com',
+  mobile: '0000000000',
+  role: UserRole.SUPER_ADMIN,
+  status: UserStatus.ACTIVE,
+  companyId: 'SYSTEM',
+  password: 'admin',
+  pin: '1234'
 };
 
 const getInitialState = (): AppState => {
@@ -24,24 +37,40 @@ const getInitialState = (): AppState => {
     const stored = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null;
     if (stored) {
       const parsed = JSON.parse(stored);
+      
+      // Merge logic: Ensure MASTER_ADMIN is always in the users list
+      const users = parsed.users || [];
+      const hasMaster = users.some((u: User) => u.email === MASTER_ADMIN.email || u.id === MASTER_ADMIN.id);
+      
       return {
         ...parsed,
+        users: hasMaster ? users : [MASTER_ADMIN, ...users],
         projects: parsed.projects || [],
         tasks: parsed.tasks || [],
         leaves: parsed.leaves || [],
-        version: '4.0.0-robust-auth'
+        version: '4.2.1-pragati-master-ops'
       };
     }
   } catch (e) {
     console.error("Store recovery failed, initializing fresh state.");
   }
+
   return {
-    users: [], companies: [], sites: [], projects: [], tasks: [], leaves: [],
-    attendance: [], workLogs: [], requests: [], subscriptionPlans: [
+    users: [MASTER_ADMIN], 
+    companies: [], 
+    sites: [], 
+    projects: [], 
+    tasks: [], 
+    leaves: [],
+    attendance: [], 
+    workLogs: [], 
+    requests: [], 
+    subscriptionPlans: [
       { id: 'p-free', name: 'Standard (Free)', price: 0, durationDays: 365, userLimit: 5, features: ['Basic Attendance', 'Work Logs', 'Manual Payroll'] },
       { id: 'p-pro', name: 'Enterprise Pro', price: 4999, durationDays: 30, userLimit: 50, features: ['Advanced Payroll', 'Geofencing', 'Task Management', 'Leave Portal', 'AI Audits'] }
     ],
-    salarySlips: [], version: '4.0.0-robust-auth'
+    salarySlips: [], 
+    version: '4.2.1-pragati-master-ops'
   };
 };
 
@@ -72,21 +101,30 @@ export const useStore = () => {
     });
   };
 
+  const resetSystem = () => {
+    localStorage.removeItem(STORAGE_KEY);
+    window.location.reload();
+  };
+
   return {
     state,
-    // Centralized Auth Logic
+    resetSystem,
     authenticate: (identifier: string, secret: string): User | null => {
       const cleanId = identifier.trim().toLowerCase();
       const cleanMobileId = normalizeMobile(cleanId);
       const cleanSecret = secret.trim();
 
+      if (!cleanId || !cleanSecret) return null;
+
       return state.users.find(u => {
         const storedEmail = (u.email || '').trim().toLowerCase();
         const storedMobile = normalizeMobile(u.mobile);
+        const storedPassword = (u.password || '').trim();
+        const storedPin = (u.pin || '').trim();
         
         const isEmailMatch = storedEmail === cleanId;
         const isMobileMatch = cleanMobileId !== '' && storedMobile === cleanMobileId;
-        const isSecretMatch = u.password === cleanSecret || u.pin === cleanSecret;
+        const isSecretMatch = storedPassword === cleanSecret || storedPin === cleanSecret;
 
         return (isEmailMatch || isMobileMatch) && isSecretMatch;
       }) || null;
@@ -103,7 +141,7 @@ export const useStore = () => {
         return false;
       });
 
-      if (exists) throw new Error("ID Conflict: Email or Mobile already registered in the cloud.");
+      if (exists) throw new Error("ID Conflict: Email or Mobile already registered.");
 
       const newUser = { 
         status: UserStatus.PENDING, 
@@ -169,82 +207,49 @@ export const useStore = () => {
     addSite: async (s: any) => updateState(p => ({ ...p, sites: [...p.sites, { ...s, id: `s-${Date.now()}` }] })),
     removeSite: async (id: string) => updateState(p => ({ ...p, sites: p.sites.filter(s => s.id !== id) })),
     removeCompany: async (id: string) => updateState(p => ({ ...p, companies: p.companies.filter(c => c.id !== id) })),
-    purchaseSubscription: async (cid: string, pid: string) => updateState(p => ({ ...p, companies: p.companies.map(c => c.id === cid ? { ...c, subscriptionPlanId: pid, subscriptionExpiry: new Date(Date.now() + 30 * 86400000).toISOString() } : c) })),
+    purchaseSubscription: async (cid: string, pid: string, months: number = 1) => {
+      updateState(p => ({ 
+        ...p, 
+        companies: p.companies.map(c => c.id === cid ? { 
+          ...c, 
+          subscriptionPlanId: pid, 
+          subscriptionExpiry: new Date(Date.now() + (months * 30) * 86400000).toISOString() 
+        } : c) 
+      }));
+    },
     updateSubscriptionPlanConfig: async (plan: SubscriptionPlan) => {
       updateState(p => ({ ...p, subscriptionPlans: p.subscriptionPlans.map(sp => sp.id === plan.id ? plan : sp) }));
     },
-    
     addManualSalarySlip: async (slip: Omit<MonthlySalarySlip, 'id' | 'generatedDate'>) => {
       updateState(p => ({ ...p, salarySlips: [...p.salarySlips, { ...slip, id: `slip-${Date.now()}`, generatedDate: new Date().toISOString() }] }));
     },
-
     generateMonthlySlips: async (cid: string, month: number, year: number) => {
       updateState(p => {
         const companyUsers = p.users.filter(u => u.companyId === cid && u.role !== UserRole.SUPER_ADMIN);
-        
         const newSlips: MonthlySalarySlip[] = companyUsers.map(u => {
-          const monthAttendance = p.attendance.filter(a => 
-            a.userId === u.id && 
-            new Date(a.date).getMonth() === month && 
-            new Date(a.date).getFullYear() === year
-          );
-
-          let hourlyRate = 0;
-          if (u.salaryType === SalaryType.DAILY_WAGE) {
-            hourlyRate = (u.salaryAmount || 0) / STANDARD_SHIFT_HOURS;
-          } else {
-            hourlyRate = ((u.salaryAmount || 0) / 30) / STANDARD_SHIFT_HOURS;
-          }
-
-          let totalCalculatedPay = 0;
-          let totalOtPay = 0;
-          let totalHoursWorked = 0;
-
+          const monthAttendance = p.attendance.filter(a => a.userId === u.id && new Date(a.date).getMonth() === month && new Date(a.date).getFullYear() === year);
+          let hourlyRate = u.salaryType === SalaryType.DAILY_WAGE ? (u.salaryAmount || 0) / STANDARD_SHIFT_HOURS : ((u.salaryAmount || 0) / 30) / STANDARD_SHIFT_HOURS;
+          let totalCalculatedPay = 0, totalOtPay = 0, totalHoursWorked = 0;
           monthAttendance.forEach(att => {
             if (att.checkIn && att.checkOut) {
               const hours = calculateHours(att.checkIn, att.checkOut);
               totalHoursWorked += hours;
-              const regularHours = Math.min(hours, STANDARD_SHIFT_HOURS);
-              totalCalculatedPay += regularHours * hourlyRate;
-              const excessHours = Math.max(0, hours - STANDARD_SHIFT_HOURS);
-              const manualOt = att.overtimeHours || 0;
-              totalOtPay += (excessHours + manualOt) * (u.overtimeRate || hourlyRate);
+              totalCalculatedPay += Math.min(hours, STANDARD_SHIFT_HOURS) * hourlyRate;
+              totalOtPay += (Math.max(0, hours - STANDARD_SHIFT_HOURS) + (att.overtimeHours || 0)) * (u.overtimeRate || hourlyRate);
             }
           });
-
-          const approvedAdvances = p.requests.filter(r => 
-            r.userId === u.id && 
-            r.type === 'ADVANCE' && 
-            r.status === RequestStatus.APPROVED &&
-            new Date(r.date).getMonth() === month &&
-            new Date(r.date).getFullYear() === year
-          );
-          const advanceDeduction = approvedAdvances.reduce((sum, r) => sum + r.amount, 0);
-
-          // Deductions Logic
+          const advanceDeduction = p.requests.filter(r => r.userId === u.id && r.type === 'ADVANCE' && r.status === RequestStatus.APPROVED && new Date(r.date).getMonth() === month && new Date(r.date).getFullYear() === year).reduce((sum, r) => sum + r.amount, 0);
           const pfDeduction = u.pfEnabled ? (u.pfAmount || 0) : 0;
           const medicalDeduction = u.medicalEnabled ? (u.medicalAmount || 0) : 0;
-
           return {
-            id: `slip-${u.id}-${month}-${year}-${Date.now()}`,
-            userId: u.id,
-            companyId: cid,
-            month,
-            year,
-            baseAmount: Math.round(totalCalculatedPay),
-            overtimeAmount: Math.round(totalOtPay),
-            overtimeHours: Math.round(totalHoursWorked),
-            advanceDeduction: advanceDeduction,
-            pfDeduction: pfDeduction,
-            medicalDeduction: medicalDeduction,
+            id: `slip-${u.id}-${month}-${year}-${Date.now()}`, userId: u.id, companyId: cid, month, year,
+            baseAmount: Math.round(totalCalculatedPay), overtimeAmount: Math.round(totalOtPay), overtimeHours: Math.round(totalHoursWorked),
+            advanceDeduction, pfDeduction, medicalDeduction,
             totalAmount: Math.round((totalCalculatedPay + totalOtPay) - advanceDeduction - pfDeduction - medicalDeduction),
-            status: PaymentStatus.UNPAID,
-            generatedDate: new Date().toISOString()
+            status: PaymentStatus.UNPAID, generatedDate: new Date().toISOString()
           };
         });
-
-        const filteredOld = p.salarySlips.filter(s => !(s.companyId === cid && s.month === month && s.year === year));
-        return { ...p, salarySlips: [...filteredOld, ...newSlips] };
+        return { ...p, salarySlips: [...p.salarySlips.filter(s => !(s.companyId === cid && s.month === month && s.year === year)), ...newSlips] };
       });
     },
     updateSalaryStatus: async (slipId: string, status: PaymentStatus) => {

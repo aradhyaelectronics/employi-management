@@ -22,10 +22,8 @@ const SubscriptionCenter: React.FC<Props> = ({ user, state, updatePlan, purchase
     }
   };
 
-  const handlePurchase = (planId: string) => {
-    if (confirm("Proceed to simulated secure payment for this plan?")) {
-      purchasePlan(user.companyId, planId);
-    }
+  const handlePurchase = (planName: string) => {
+    alert(`PLAN ACTIVATION REQUIRED\n\nPlease contact our support team to activate the "${planName}" plan.\n\nCall to support team: 7709384868`);
   };
 
   return (
@@ -155,7 +153,7 @@ const SubscriptionCenter: React.FC<Props> = ({ user, state, updatePlan, purchase
                     </ul>
                     <button 
                       disabled={isActive}
-                      onClick={() => handlePurchase(plan.id)}
+                      onClick={() => handlePurchase(plan.name)}
                       className={`w-full py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${isActive ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-100'}`}
                     >
                       {isActive ? 'Active Subscription' : (plan.price === 0 ? 'Activate Free Tier' : 'Upgrade Enterprise')}

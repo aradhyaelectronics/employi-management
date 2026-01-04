@@ -22,6 +22,7 @@ const App: React.FC = () => {
   const { 
     state, 
     authenticate,
+    resetSystem,
     addUser, 
     updateUser,
     removeUser,
@@ -155,11 +156,20 @@ const App: React.FC = () => {
     setIsAuthenticating(true);
     setAuthError(null);
 
-    // Snappy feedback delay
-    await new Promise(r => setTimeout(r, 150));
+    // Fast feedback delay
+    await new Promise(r => setTimeout(r, 100));
+
+    const idInput = formData.identifier.trim();
+    const secretInput = formData.secret.trim();
+
+    if (!idInput || !secretInput) {
+      setAuthError('ID and Secret are required.');
+      setIsAuthenticating(false);
+      return;
+    }
 
     if (isLogin) {
-      const user = authenticate(formData.identifier, formData.secret);
+      const user = authenticate(idInput, secretInput);
 
       if (user) {
         if (user.status === UserStatus.PENDING) {
@@ -182,8 +192,8 @@ const App: React.FC = () => {
         if (isSystemLogin) {
           const superAdmin = await addUser({ 
             name: formData.name.trim(), 
-            email: formData.identifier.trim().toLowerCase(), 
-            password: formData.secret.trim(), 
+            email: idInput.toLowerCase(), 
+            password: secretInput, 
             role: UserRole.SUPER_ADMIN, 
             companyId: 'SYSTEM',
             status: UserStatus.ACTIVE 
@@ -193,8 +203,8 @@ const App: React.FC = () => {
           const company = await addCompany(formData.companyName.trim());
           const admin = await addUser({ 
             name: formData.name.trim(), 
-            email: formData.identifier.trim().toLowerCase(), 
-            password: formData.secret.trim(), 
+            email: idInput.toLowerCase(), 
+            password: secretInput, 
             role: UserRole.ADMIN, 
             companyId: company.id,
             status: UserStatus.ACTIVE 
@@ -206,6 +216,12 @@ const App: React.FC = () => {
       }
     }
     setIsAuthenticating(false);
+  };
+
+  const handleForceReset = () => {
+    if (confirm("DANGER: This will delete ALL local data and restore the default Master Admin account. Proceed?")) {
+      resetSystem();
+    }
   };
 
   if (!currentUser) return (
@@ -240,6 +256,7 @@ const App: React.FC = () => {
         <div className="mt-8 pt-6 border-t border-gray-50 flex flex-col gap-2 w-full">
            <button onClick={() => setIsLogin(!isLogin)} className="w-full text-gray-400 font-black text-[9px] uppercase tracking-widest hover:text-blue-900 transition-colors">{isLogin ? 'Create New Account' : 'Return to Login'}</button>
            <button onClick={() => { setIsSystemLogin(!isSystemLogin); setIsLogin(true); }} className="w-full text-gray-300 font-black text-[8px] uppercase tracking-[0.4em] hover:text-slate-900 transition-colors">Internal Ops Access</button>
+           <button onClick={handleForceReset} className="w-full text-red-300 font-black text-[7px] uppercase tracking-[0.2em] hover:text-red-500 transition-colors mt-2">Corrupted Login? Force System Reset</button>
         </div>
         
         {/* Footer in Login View */}
