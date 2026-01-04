@@ -106,6 +106,7 @@ const App: React.FC = () => {
           nav: [
             { id: 'dashboard', label: 'Global Overview', icon: ICONS.Dashboard },
             { id: 'enterprise', label: 'Enterprise Registry', icon: ICONS.Users },
+            { id: 'subscription', label: 'Plan Architect', icon: ICONS.Rocket },
             { id: 'backend', label: 'Backend Ops', icon: ICONS.Dashboard },
             { id: 'users', label: 'Identity Control', icon: ICONS.Shield },
             ...commonNav
@@ -328,7 +329,7 @@ const App: React.FC = () => {
             {activeTab === 'work' && <WorkTracking user={currentUser} state={state} addWorkLog={addWorkLog} />}
             {activeTab === 'financials' && <FinancialManagement user={currentUser} state={state} addRequest={addFinancialRequest} updateStatus={updateRequestStatus} generateMonthlySlips={generateMonthlySlips} addManualSalarySlip={addManualSalarySlip} updateSalaryStatus={updateSalaryStatus} />}
             {activeTab === 'users' && <UserManagement user={currentUser} state={state} addUser={addUser} updateUser={updateUser} removeUser={removeUser} />}
-            {activeTab === 'subscription' && <SubscriptionCenter user={currentUser} state={state} updatePlan={updateSubscriptionPlanConfig} purchasePlan={purchaseSubscription} />}
+            {activeTab === 'subscription' && <SubscriptionCenter user={currentUser} state={state} updatePlan={updateSubscriptionPlanConfig} purchasePlan={purchaseSubscription} removeUser={removeUser} />}
             {activeTab === 'enterprise' && <CompanyManagement state={state} removeCompany={removeCompany} purchaseSubscription={purchaseSubscription} />}
             {activeTab === 'backend' && <BackendConsole state={state} updateUser={updateUser} removeUser={removeUser} />}
             {activeTab === 'legal' && <LegalCompliance />}

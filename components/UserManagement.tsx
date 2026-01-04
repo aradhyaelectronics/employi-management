@@ -58,7 +58,8 @@ const UserManagement: React.FC<Props> = ({ user, state, addUser, updateUser, rem
   const mobileConflict = useMemo(() => {
     const clean = newUser.mobile.replace(/\s+/g, '');
     if (!clean) return false;
-    return state.users.some(u => u.mobile?.replace(/\s+/g) === clean);
+    // Fix: Added missing replacement string argument to replace()
+    return state.users.some(u => u.mobile?.replace(/\s+/g, '') === clean);
   }, [newUser.mobile, state.users]);
 
   useEffect(() => {
@@ -75,8 +76,10 @@ const UserManagement: React.FC<Props> = ({ user, state, addUser, updateUser, rem
       return;
     }
     try {
+      // Fix: Added missing 'status' property to satisfy Omit<User, 'id'> type requirement
       await addUser({
         ...newUser,
+        status: UserStatus.PENDING,
         email: newUser.email.replace(/\s+/g, '').toLowerCase(),
         mobile: newUser.mobile.replace(/\s+/g, ''),
         companyId: user.companyId
