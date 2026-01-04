@@ -293,6 +293,7 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
                    <tr>
                      <th className="px-8 py-5 text-[9px] font-black text-gray-400 uppercase tracking-widest">Personnel / Site</th>
                      <th className="px-8 py-5 text-[9px] font-black text-gray-400 uppercase tracking-widest">Classification</th>
+                     <th className="px-8 py-5 text-[9px] font-black text-blue-400 uppercase tracking-widest">Spec / Size</th>
                      <th className="px-8 py-5 text-[9px] font-black text-gray-400 uppercase tracking-widest text-center">Progress</th>
                      <th className="px-8 py-5 text-[9px] font-black text-gray-400 uppercase tracking-widest text-right">Activity Date</th>
                    </tr>
@@ -314,10 +315,14 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
                                <p className="text-xs font-black text-blue-900 uppercase">{log.workType}</p>
                                <p className="text-[8px] font-bold text-gray-400 uppercase mt-0.5 line-clamp-1">{log.description}</p>
                             </td>
+                            <td className="px-8 py-6">
+                               <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100">
+                                  {log.subCategory}
+                               </span>
+                            </td>
                             <td className="px-8 py-6 text-center">
                                <div className="flex flex-col items-center">
                                   <span className="font-black text-green-600 text-lg">{log.meters} <span className="text-[8px] text-gray-400 uppercase">Unit</span></span>
-                                  <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest">{log.subCategory}</span>
                                </div>
                             </td>
                             <td className="px-8 py-6 text-right font-black text-gray-400 text-[10px] uppercase">
@@ -329,7 +334,7 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
                     })}
                     {filteredLogs.length === 0 && (
                       <tr>
-                        <td colSpan={4} className="px-8 py-20 text-center text-gray-300 font-black uppercase text-[10px] tracking-widest">
+                        <td colSpan={5} className="px-8 py-20 text-center text-gray-300 font-black uppercase text-[10px] tracking-widest">
                            <div className="flex flex-col items-center justify-center opacity-30">
                               <svg className="w-12 h-12 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>
                               No telemetry records match current filters.

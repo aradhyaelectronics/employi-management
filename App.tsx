@@ -22,7 +22,7 @@ const App: React.FC = () => {
     addSite, removeSite, markAttendance, updateAttendance, addWorkLog, 
     addFinancialRequest, updateRequestStatus, generateMonthlySlips, 
     addManualSalarySlip, updateSalaryStatus, removeCompany, purchaseSubscription,
-    updateSubscriptionPlanConfig
+    updateSubscriptionPlanConfig, getAiSystemContext
   } = useStore();
   
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
@@ -49,11 +49,6 @@ const App: React.FC = () => {
   const navItems = useMemo(() => {
     if (!currentUser) return [];
     const role = currentUser.role;
-    const base = [
-      { id: 'dashboard', label: 'Dashboard', icon: ICONS.Dashboard },
-      { id: 'legal', label: 'Compliance', icon: ICONS.Shield }
-    ];
-    
     if (role === UserRole.SUPER_ADMIN) {
       return [
         { id: 'dashboard', label: 'Master Root', icon: ICONS.Dashboard },
@@ -92,7 +87,7 @@ const App: React.FC = () => {
   }, [currentUser]);
 
   const handleLogout = () => {
-    if(confirm("Are you sure you want to sign out?")) {
+    if(confirm("Confirm security termination for this session?")) {
       setCurrentUser(null);
       setIsLocked(false);
       setActiveTab('dashboard');
@@ -107,7 +102,7 @@ const App: React.FC = () => {
       if (isLogin) {
         const user = authenticate(formData.identifier, formData.secret);
         if (user) setCurrentUser(user);
-        else setAuthError("ID or PIN is incorrect.");
+        else setAuthError("Security Failure: Identifier or Secret mismatch.");
       } else {
         if (isSystemLogin) {
           const u = await addUser({ name: formData.name, email: formData.identifier, password: formData.secret, role: UserRole.SUPER_ADMIN, companyId: 'SYSTEM', status: UserStatus.ACTIVE });
@@ -126,7 +121,7 @@ const App: React.FC = () => {
       <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md p-10 text-center animate-in zoom-in-95 duration-500">
         <Logo iconClassName="w-20 h-16 mx-auto mb-6" showText={false} />
         <h2 className="text-2xl font-black uppercase mb-2 text-slate-800 tracking-tighter">{isLogin ? 'Personnel Login' : 'Launch Enterprise'}</h2>
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-8">{isLogin ? 'Enter ID & Security PIN' : 'Infrastructure Registration'}</p>
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-8">{isLogin ? 'ID / Mobile / Email & Security Secret' : 'Infrastructure Registration'}</p>
         
         {authError && <div className="mb-6 bg-red-50 text-red-600 p-4 rounded-2xl text-[10px] font-black uppercase border border-red-100">{authError}</div>}
         
@@ -137,8 +132,8 @@ const App: React.FC = () => {
               <input type="text" placeholder="Full Name" className="w-full px-6 py-5 bg-gray-50 rounded-2xl border outline-none font-bold text-sm" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required />
             </>
           )}
-          <input type="text" placeholder={isLogin ? "Employee ID / Master ID" : "Email ID"} className="w-full px-6 py-5 bg-gray-50 rounded-2xl border outline-none font-black text-sm text-center uppercase tracking-widest" value={formData.identifier} onChange={e => setFormData({...formData, identifier: e.target.value})} required />
-          <input type="password" placeholder={isLogin ? "4-Digit PIN" : "Master Password"} maxLength={isLogin ? 4 : 20} className="w-full px-6 py-5 bg-gray-50 rounded-2xl border outline-none font-black text-xl text-center tracking-[0.5em]" value={formData.secret} onChange={e => setFormData({...formData, secret: e.target.value})} required />
+          <input type="text" placeholder={isLogin ? "ID / Mobile / Email" : "Email ID"} className="w-full px-6 py-5 bg-gray-50 rounded-2xl border outline-none font-black text-sm text-center uppercase tracking-widest" value={formData.identifier} onChange={e => setFormData({...formData, identifier: e.target.value})} required />
+          <input type="password" placeholder={isLogin ? "PIN / Password" : "Master Password"} maxLength={isLogin ? 20 : 40} className="w-full px-6 py-5 bg-gray-50 rounded-2xl border outline-none font-black text-xl text-center tracking-[0.2em]" value={formData.secret} onChange={e => setFormData({...formData, secret: e.target.value})} required />
           <button type="submit" className="w-full bg-orange-600 text-white py-5 rounded-2xl font-black uppercase tracking-widest hover:bg-orange-700 transition-all shadow-xl shadow-orange-900/20 active:scale-95">
             {isLogin ? 'Unlock Portal' : 'Create Cluster'}
           </button>
@@ -147,7 +142,7 @@ const App: React.FC = () => {
         <div className="mt-8 flex flex-col gap-3">
           <button onClick={() => setIsLogin(!isLogin)} className="text-[10px] font-black text-blue-600 uppercase tracking-widest hover:underline">{isLogin ? 'Register New Enterprise' : 'Back to Login'}</button>
           <button onClick={() => { setIsSystemLogin(!isSystemLogin); setIsLogin(true); }} className="text-[8px] font-black text-slate-300 uppercase tracking-[0.4em]">{isSystemLogin ? 'User Login' : 'Master Root Access'}</button>
-          <button onClick={resetSystem} className="text-[7px] font-black text-red-300 uppercase mt-4">Cloud Reset</button>
+          <button onClick={resetSystem} className="text-[7px] font-black text-red-300 uppercase mt-4">System Purge</button>
         </div>
       </div>
     </div>
@@ -157,7 +152,6 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-slate-50">
-      {/* Desktop Sidebar */}
       <aside className="hidden md:flex w-72 bg-slate-900 text-white flex-col p-8 sticky top-0 h-screen shadow-2xl">
         <div className="mb-12 flex items-center space-x-3">
           <Logo iconClassName="w-10 h-8" showText={false} light={true} />
@@ -177,7 +171,6 @@ const App: React.FC = () => {
         <button onClick={handleLogout} className="mt-8 w-full py-4 bg-red-600/10 text-red-500 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-red-600 hover:text-white transition-all border border-red-900/20">Sign Out</button>
       </aside>
 
-      {/* Main Viewport */}
       <div className="flex-1 flex flex-col min-w-0">
         <header className="bg-white border-b px-6 py-4 flex items-center justify-between sticky top-0 z-[60] safe-top shadow-sm">
            <div className="flex items-center space-x-4">
@@ -197,14 +190,14 @@ const App: React.FC = () => {
                 <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{state.companies.find(c => c.id === currentUser.companyId)?.name || 'MASTER ROOT'}</p>
               </div>
               <button onClick={handleLogout} className="p-2.5 bg-red-50 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all shadow-sm">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013-3v1" /></svg>
               </button>
            </div>
         </header>
 
         <main className="p-4 md:p-10 flex-1 overflow-y-auto pb-32 md:pb-10 bg-slate-50/30">
           <div className="max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-2 duration-500">
-             {activeTab === 'dashboard' && <Dashboard user={currentUser} state={state} updatePassword={updateUserPassword} />}
+             {activeTab === 'dashboard' && <Dashboard user={currentUser} state={state} getAiSystemContext={getAiSystemContext} updatePassword={updateUserPassword} />}
              {activeTab === 'attendance' && <AttendancePanel user={currentUser} state={state} markAttendance={markAttendance} updateAttendance={updateAttendance} addSite={addSite} removeSite={removeSite} />}
              {activeTab === 'work' && <WorkTracking user={currentUser} state={state} addWorkLog={addWorkLog} />}
              {activeTab === 'financials' && <FinancialManagement user={currentUser} state={state} addRequest={addFinancialRequest} updateStatus={updateRequestStatus} generateMonthlySlips={generateMonthlySlips} addManualSalarySlip={addManualSalarySlip} updateSalaryStatus={updateSalaryStatus} />}
@@ -215,7 +208,6 @@ const App: React.FC = () => {
           </div>
         </main>
 
-        {/* Mobile Navigation */}
         <nav className="fixed bottom-0 left-0 right-0 bg-white border-t flex md:hidden h-20 items-center justify-around px-4 z-[70] safe-bottom shadow-2xl">
            {navItems.slice(0, 5).map(item => (
              <button key={item.id} onClick={() => setActiveTab(item.id)} className={`flex flex-col items-center justify-center space-y-1 w-full transition-all ${activeTab === item.id ? 'text-blue-600' : 'text-slate-400 opacity-60'}`}>
