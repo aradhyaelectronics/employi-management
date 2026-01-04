@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
-import { User, AppState, FinancialRequest, RequestStatus, UserRole, PaymentStatus, MonthlySalarySlip } from '../types';
+import { User, AppState, FinancialRequest, RequestStatus, UserRole, PaymentStatus, MonthlySalarySlip, Company } from '../types';
+import SalarySlipModal from './SalarySlipModal';
 
 interface Props {
   user: User;
@@ -15,6 +16,7 @@ interface Props {
 const FinancialManagement: React.FC<Props> = ({ user, state, addRequest, updateStatus, generateMonthlySlips, updateSalaryStatus }) => {
   const [formData, setFormData] = useState({ amount: 0, type: 'ADVANCE' as any, description: '' });
   const [penaltyData, setPenaltyData] = useState({ userId: '', amount: 0, description: '' });
+  const [selectedSlipsToPrint, setSelectedSlipsToPrint] = useState<MonthlySalarySlip[] | null>(null);
   
   const isAdmin = user.role === UserRole.ADMIN || user.role === UserRole.SUPER_ADMIN;
   const isEmployee = user.role === UserRole.EMPLOYEE;
@@ -49,10 +51,14 @@ const FinancialManagement: React.FC<Props> = ({ user, state, addRequest, updateS
   };
 
   const myReqs = state.requests.filter(r => isEmployee ? r.userId === user.id : r.companyId === user.companyId).sort((a,b) => b.date.localeCompare(a.date));
-  const mySlips = state.salarySlips.filter(s => isEmployee ? s.userId === user.id : s.companyId === user.companyId).sort((a,b) => b.year !== a.year ? b.year - a.year : b.month - a.month);
+  const mySlips = useMemo(() => {
+    return state.salarySlips
+      .filter(s => isEmployee ? s.userId === user.id : s.companyId === user.companyId)
+      .sort((a, b) => b.year !== a.year ? b.year - a.year : b.month - a.month);
+  }, [state.salarySlips, user, isEmployee]);
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-8 animate-in fade-in duration-500 pb-20">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* standard Request form */}
         <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
@@ -98,11 +104,86 @@ const FinancialManagement: React.FC<Props> = ({ user, state, addRequest, updateS
         </div>
       )}
 
+      {/* Salary Slips Registry (New) */}
+      <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
+        <div className="p-8 border-b bg-blue-50/30 flex justify-between items-center">
+          <h4 className="text-sm font-black uppercase text-blue-900 tracking-tighter">Generated Salary Slips</h4>
+          {isAdmin && mySlips.length > 0 && (
+            <button 
+              onClick={() => setSelectedSlipsToPrint(mySlips)}
+              className="px-6 py-2.5 bg-blue-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-lg shadow-blue-900/10"
+            >
+              Print All Slips
+            </button>
+          )}
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead className="bg-slate-50/50">
+              <tr>
+                <th className="px-8 py-5 text-[9px] font-black uppercase text-slate-400 tracking-widest">Personnel</th>
+                <th className="px-8 py-5 text-[9px] font-black uppercase text-slate-400 tracking-widest text-center">Cycle (M/Y)</th>
+                <th className="px-8 py-5 text-[9px] font-black uppercase text-slate-400 tracking-widest text-center">Net Amount</th>
+                <th className="px-8 py-5 text-[9px] font-black uppercase text-slate-400 tracking-widest text-center">Status</th>
+                <th className="px-8 py-5 text-[9px] font-black uppercase text-slate-400 tracking-widest text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {mySlips.map(s => {
+                const emp = state.users.find(u => u.id === s.userId);
+                return (
+                  <tr key={s.id} className="hover:bg-slate-50/50 transition-all">
+                    <td className="px-8 py-6">
+                      <p className="text-xs font-black text-slate-800 uppercase">{emp?.name || s.userId}</p>
+                      <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">ID: {s.userId}</p>
+                    </td>
+                    <td className="px-8 py-6 text-center text-xs font-black text-slate-700">
+                      {s.month + 1}/{s.year}
+                    </td>
+                    <td className="px-8 py-6 text-center">
+                      <p className="text-sm font-black text-blue-900">₹{s.totalAmount.toLocaleString()}</p>
+                    </td>
+                    <td className="px-8 py-6 text-center">
+                      <span className={`px-3 py-1 rounded-xl text-[8px] font-black uppercase border ${s.status === PaymentStatus.PAID ? 'bg-green-50 text-green-600 border-green-100' : 'bg-red-50 text-red-600 border-red-100'}`}>
+                        {s.status}
+                      </span>
+                    </td>
+                    <td className="px-8 py-6 text-right space-x-3">
+                      <button 
+                        onClick={() => setSelectedSlipsToPrint([s])}
+                        className="text-blue-600 font-black text-[9px] uppercase hover:underline"
+                      >
+                        Print Slip
+                      </button>
+                      {isAdmin && s.status === PaymentStatus.UNPAID && (
+                        <button 
+                          onClick={() => updateSalaryStatus(s.id, PaymentStatus.PAID)}
+                          className="text-green-600 font-black text-[9px] uppercase hover:underline"
+                        >
+                          Mark Paid
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
+              {mySlips.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-8 py-20 text-center">
+                    <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.4em]">No Salary Slips Generated Yet</p>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       {/* Transaction History Ledger */}
       <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
         <div className="p-8 border-b bg-slate-50/50 flex justify-between items-center">
-          <h4 className="text-sm font-black uppercase text-slate-800 tracking-tighter">Enterprise Financial Ledger</h4>
-          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Live Sync: Active</span>
+          <h4 className="text-sm font-black uppercase text-slate-800 tracking-tighter">Advances & Adjustments Ledger</h4>
+          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Global Audit Log</span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
@@ -148,6 +229,15 @@ const FinancialManagement: React.FC<Props> = ({ user, state, addRequest, updateS
           </table>
         </div>
       </div>
+
+      {/* Salary Slip Print Modal */}
+      {selectedSlipsToPrint && (
+        <SalarySlipModal 
+          slips={selectedSlipsToPrint} 
+          state={state} 
+          onClose={() => setSelectedSlipsToPrint(null)} 
+        />
+      )}
     </div>
   );
 };

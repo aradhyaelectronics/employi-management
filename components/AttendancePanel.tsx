@@ -444,6 +444,7 @@ const AttendancePanel: React.FC<Props> = ({ user, state, markAttendance, updateA
             <thead>
               <tr className="bg-slate-50/80">
                 <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Personnel / Date</th>
+                <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Site Node</th>
                 <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Operational Cycle</th>
                 <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Work Units (Hrs)</th>
                 {isAdmin && <th className="px-10 py-6 text-[10px] font-black text-blue-600 uppercase tracking-widest text-right">Registry Action</th>}
@@ -460,11 +461,14 @@ const AttendancePanel: React.FC<Props> = ({ user, state, markAttendance, updateA
                   <tr key={log.id} className="hover:bg-slate-50/50 transition-all group">
                     <td className="px-10 py-6">
                       <p className="text-sm font-black text-slate-800 uppercase group-hover:text-blue-600 transition-colors">{personnel?.name || log.userId}</p>
-                      <div className="flex items-center space-x-2 mt-1">
-                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{log.date}</span>
-                        <span className="text-slate-300">•</span>
-                        <span className="text-[9px] font-black text-orange-600 uppercase tracking-tighter">{site?.name || 'GEN-NODE'}</span>
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">{log.date}</p>
+                    </td>
+                    <td className="px-10 py-6">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-orange-500"></div>
+                        <span className="text-[10px] font-black text-slate-700 uppercase tracking-tight">{site?.name || 'GEN-NODE'}</span>
                       </div>
+                      <p className="text-[8px] font-bold text-slate-300 uppercase tracking-widest mt-0.5">{site?.address || 'Site Record'}</p>
                     </td>
                     <td className="px-10 py-6">
                       {isEditing ? (
