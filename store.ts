@@ -3,11 +3,11 @@ import React from 'react';
 import { 
   AppState, User, Company, UserRole, UserStatus, RequestStatus, 
   WorkLog, FinancialRequest, MonthlySalarySlip, ServerEvent,
-  PaymentStatus, Project, Task, LeaveRequest, SalaryType, SubscriptionPlan, Attendance, IntegrationConfig 
+  PaymentStatus, Project, Task, LeaveRequest, SalaryType, SubscriptionPlan, Attendance, IntegrationConfig, Invoice 
 } from './types';
 
 const STORAGE_KEY = 'employeemanagement_cloud_v4';
-const CURRENT_VERSION = '4.7.7-razorpay-fix';
+const CURRENT_VERSION = '4.7.8-invoicing';
 const STANDARD_SHIFT_HOURS = 8;
 
 const normalizeMobile = (num: string | undefined): string => {
@@ -44,6 +44,7 @@ const DEFAULT_STATE: AppState = {
     { id: 'p-ultra', name: 'Elite Infrastructure', price: 12999, durationDays: 30, userLimit: 500, features: ['24/7 Priority Support', 'Dedicated Cloud Node', 'Custom API Access'] }
   ],
   salarySlips: [], 
+  invoices: [],
   systemLogs: [{ id: 'evt-0', timestamp: new Date().toISOString(), type: 'INFO', message: 'Cloud Server Initialized', source: 'CORE' }],
   integrations: {
     razorpayKeyId: 'rzp_test_58Xm92p1Yk87X',
@@ -155,7 +156,37 @@ export const useStore = () => {
     },
 
     updateCompanyStatus: async (id: string, status: UserStatus) => pushCloudUpdate(p => ({ ...p, companies: p.companies.map(c => c.id === id ? { ...c, status } : c) })),
-    purchaseSubscription: async (cid: string, pid: string, months: number = 1) => pushCloudUpdate(p => ({ ...p, companies: p.companies.map(c => c.id === cid ? { ...c, subscriptionPlanId: pid, subscriptionExpiry: new Date(Date.now() + (months * 30) * 86400000).toISOString() } : c) })),
+    
+    purchaseSubscription: async (cid: string, pid: string, months: number = 1, txId?: string) => {
+      const plan = state.subscriptionPlans.find(p => p.id === pid);
+      if (!plan) return;
+
+      const now = new Date();
+      const expiry = new Date(now.getTime() + (months * 30) * 86400000);
+      const transactionReference = txId || `TXN-${Date.now()}`;
+
+      const newInvoice: Invoice = {
+        id: `INV-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        companyId: cid,
+        planId: pid,
+        amount: plan.price * months,
+        date: now.toISOString(),
+        expiryDate: expiry.toISOString(),
+        transactionId: transactionReference,
+        status: 'SUCCESS'
+      };
+
+      pushCloudUpdate(p => ({ 
+        ...p, 
+        companies: p.companies.map(c => c.id === cid ? { 
+          ...c, 
+          subscriptionPlanId: pid, 
+          subscriptionExpiry: expiry.toISOString() 
+        } : c),
+        invoices: [...p.invoices, newInvoice]
+      }), `SUBSCRIPTION_UPGRADE: ${cid} to ${pid}`);
+    },
+
     removeCompany: async (id: string) => pushCloudUpdate(p => ({ ...p, companies: p.companies.filter(c => c.id !== id), users: p.users.filter(u => u.companyId !== id) })),
     updateUser: async (id: string, updates: Partial<User>) => pushCloudUpdate(p => ({ ...p, users: p.users.map(u => u.id === id ? { ...u, ...updates } : u) })),
     removeUser: async (id: string) => pushCloudUpdate(p => ({ ...p, users: p.users.filter(u => u.id !== id) })),

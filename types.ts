@@ -194,6 +194,17 @@ export interface IntegrationConfig {
   isSandboxMode: boolean;
 }
 
+export interface Invoice {
+  id: string;
+  companyId: string;
+  planId: string;
+  amount: number;
+  date: string;
+  expiryDate: string;
+  transactionId: string;
+  status: 'SUCCESS' | 'REFUNDED';
+}
+
 export interface AppState {
   users: User[];
   companies: Company[];
@@ -208,5 +219,6 @@ export interface AppState {
   salarySlips: MonthlySalarySlip[];
   systemLogs: ServerEvent[];
   integrations: IntegrationConfig;
+  invoices: Invoice[];
   version: string;
 }
