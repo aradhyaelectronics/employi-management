@@ -7,7 +7,7 @@ import {
 } from './types';
 
 const STORAGE_KEY = 'employeemanagement_cloud_v4';
-const CURRENT_VERSION = '4.5.0-dynamic-cloud';
+const CURRENT_VERSION = '4.6.1-strict-attendance';
 const STANDARD_SHIFT_HOURS = 8;
 
 const normalizeMobile = (num: string | undefined): string => {
@@ -18,7 +18,7 @@ const normalizeMobile = (num: string | undefined): string => {
 };
 
 const MASTER_ADMIN: User = {
-  id: 'u-root-001',
+  id: 'PR-MASTER-001',
   name: 'Pragati Master',
   email: 'admin@pragati.com',
   mobile: '7709384869',
@@ -55,24 +55,8 @@ const getInitialState = (): AppState => {
     if (!stored) return DEFAULT_STATE;
 
     const parsed = JSON.parse(stored);
-    
-    // Non-destructive update: Merge existing data with default containers
-    const mergedState: AppState = { 
-      ...DEFAULT_STATE, 
-      ...parsed,
-      version: CURRENT_VERSION 
-    };
-
-    // Fix array structures if corrupted
-    mergedState.users = Array.isArray(parsed.users) ? parsed.users : [MASTER_ADMIN];
-    mergedState.companies = Array.isArray(parsed.companies) ? parsed.companies : [];
-    mergedState.systemLogs = Array.isArray(parsed.systemLogs) ? parsed.systemLogs : DEFAULT_STATE.systemLogs;
-
-    // Failsafe: Re-inject Master if missing
-    if (!mergedState.users.some(u => u.id === MASTER_ADMIN.id)) {
-      mergedState.users.unshift(MASTER_ADMIN);
-    }
-
+    const mergedState: AppState = { ...DEFAULT_STATE, ...parsed, version: CURRENT_VERSION };
+    if (!mergedState.users.some(u => u.id === MASTER_ADMIN.id)) mergedState.users.unshift(MASTER_ADMIN);
     return mergedState;
   } catch (e) {
     return DEFAULT_STATE;
@@ -80,26 +64,17 @@ const getInitialState = (): AppState => {
 };
 
 export const saveState = (state: AppState) => {
-  if (typeof window !== 'undefined') {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  }
+  if (typeof window !== 'undefined') localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 };
 
 export const useStore = () => {
   const [state, setState] = React.useState<AppState>(getInitialState());
 
-  // Cloud Simulation Layer: All updates logged as server events
   const pushCloudUpdate = (updater: (prev: AppState) => AppState, logMsg?: string) => {
     setState(prev => {
       const next = updater(prev);
       if (logMsg) {
-        const newLog: ServerEvent = {
-          id: `evt-${Date.now()}`,
-          timestamp: new Date().toISOString(),
-          type: 'SYNC',
-          message: logMsg,
-          source: 'REMOTE_SYNC'
-        };
+        const newLog: ServerEvent = { id: `evt-${Date.now()}`, timestamp: new Date().toISOString(), type: 'SYNC', message: logMsg, source: 'REMOTE_SYNC' };
         next.systemLogs = [newLog, ...next.systemLogs].slice(0, 100);
       }
       saveState(next);
@@ -109,106 +84,77 @@ export const useStore = () => {
 
   const calculateHours = (start: string, end: string): number => {
     if (!start || !end) return 0;
-    try {
-      const s = start.split(':').map(Number);
-      const e = end.split(':').map(Number);
-      return Math.max(0, ((e[0] * 60 + e[1]) - (s[0] * 60 + s[1])) / 60);
-    } catch { return 0; }
+    const s = start.split(':').map(Number);
+    const e = end.split(':').map(Number);
+    return Math.max(0, ((e[0] * 60 + e[1]) - (s[0] * 60 + s[1])) / 60);
   };
 
   return {
     state,
-    resetSystem: () => {
-      localStorage.removeItem(STORAGE_KEY);
-      window.location.reload();
-    },
-    authenticate: (identifier: string, secret: string): User | null => {
-      const cleanId = identifier.trim().toLowerCase();
-      const cleanMobileId = normalizeMobile(cleanId);
-      const cleanSecret = secret.trim();
-
-      const user = state.users.find(u => {
-        const storedEmail = (u.email || '').trim().toLowerCase();
-        const storedMobile = normalizeMobile(u.mobile);
-        return (storedEmail === cleanId || (cleanMobileId !== '' && storedMobile === cleanMobileId)) 
-               && (u.password === cleanSecret || u.pin === cleanSecret);
-      });
+    resetSystem: () => { if(confirm("This will erase all enterprise data. Continue?")) { localStorage.removeItem(STORAGE_KEY); window.location.reload(); } },
+    
+    authenticate: (id: string, pin: string): User | null => {
+      const cleanId = id.trim().toUpperCase();
+      const cleanPin = pin.trim();
+      
+      const user = state.users.find(u => 
+        (u.id.toUpperCase() === cleanId || u.email.toUpperCase() === cleanId) && 
+        (u.pin === cleanPin || u.password === cleanPin)
+      );
 
       if (user && user.role !== UserRole.SUPER_ADMIN) {
         const comp = state.companies.find(c => c.id === user.companyId);
-        if (comp?.status === UserStatus.BLOCKED) throw new Error("Enterprise Suspended.");
+        if (comp?.status === UserStatus.BLOCKED) throw new Error("This enterprise is blocked by Master Root.");
       }
       return user || null;
     },
 
-    // Dynamic Entity Management
     addUser: async (u: any) => {
-      const normMobile = normalizeMobile(u.mobile);
-      if (state.users.some(ex => (u.email && ex.email.toLowerCase() === u.email.toLowerCase()) || (normMobile && normalizeMobile(ex.mobile) === normMobile))) {
-        throw new Error("Conflict: Identity already in registry.");
-      }
-      const newUser = { ...u, id: `u-${Date.now()}`, status: u.status || UserStatus.ACTIVE };
-      pushCloudUpdate(p => ({ ...p, users: [...p.users, newUser] }), `POST /api/v1/users/${newUser.id} - Created`);
+      const prefix = u.role === UserRole.SUPER_ADMIN ? 'PR-ROOT' : u.role === UserRole.ADMIN ? 'PR-ADM' : u.role === UserRole.SUPERVISOR ? 'PR-SUP' : 'PR-EMP';
+      const newId = `${prefix}-${Math.floor(1000 + Math.random() * 9000)}`;
+      const newUser = { ...u, id: newId, status: u.status || UserStatus.ACTIVE };
+      pushCloudUpdate(p => ({ ...p, users: [...p.users, newUser] }), `USER_ENROLLED: ${newId}`);
       return newUser;
     },
 
     addCompany: async (name: string) => {
-      const c: Company = { 
-        id: `c-${Date.now()}`, 
-        name, 
-        createdAt: new Date().toISOString(), 
-        status: UserStatus.ACTIVE,
-        subscriptionPlanId: 'p-free' 
-      };
-      pushCloudUpdate(p => ({ ...p, companies: [...p.companies, c] }), `POST /api/v1/enterprises - New Org: ${name}`);
+      const c: Company = { id: `CORP-${Math.floor(1000 + Math.random() * 9000)}`, name, createdAt: new Date().toISOString(), status: UserStatus.ACTIVE, subscriptionPlanId: 'p-free' };
+      pushCloudUpdate(p => ({ ...p, companies: [...p.companies, c] }), `ENTERPRISE_CREATED: ${name}`);
       return c;
     },
 
-    updateCompanyStatus: async (id: string, status: UserStatus) => {
-      pushCloudUpdate(p => ({ ...p, companies: p.companies.map(c => c.id === id ? { ...c, status } : c) }), `PATCH /api/v1/enterprises/${id}/status - ${status}`);
-    },
-
-    purchaseSubscription: async (cid: string, pid: string, months: number = 1) => {
-      pushCloudUpdate(p => ({ 
-        ...p, 
-        companies: p.companies.map(c => c.id === cid ? { 
-          ...c, 
-          subscriptionPlanId: pid, 
-          subscriptionExpiry: new Date(Date.now() + (months * 30) * 86400000).toISOString() 
-        } : c) 
-      }), `PUT /api/v1/subscriptions/${cid} - Tier Shift to ${pid}`);
-    },
-
-    removeCompany: async (id: string) => {
-      pushCloudUpdate(p => ({ 
-        ...p, 
-        companies: p.companies.filter(c => c.id !== id),
-        users: p.users.filter(u => u.companyId !== id)
-      }), `DELETE /api/v1/enterprises/${id} - Purged from Cluster`);
-    },
-
-    // Standard Operations (Passed to components)
+    updateCompanyStatus: async (id: string, status: UserStatus) => pushCloudUpdate(p => ({ ...p, companies: p.companies.map(c => c.id === id ? { ...c, status } : c) }), `TENANT_UPDATE: ${id} to ${status}`),
+    purchaseSubscription: async (cid: string, pid: string, months: number = 1) => pushCloudUpdate(p => ({ ...p, companies: p.companies.map(c => c.id === cid ? { ...c, subscriptionPlanId: pid, subscriptionExpiry: new Date(Date.now() + (months * 30) * 86400000).toISOString() } : c) }), `SUBSCRIPTION_ACTIVATED: ${cid}`),
+    removeCompany: async (id: string) => pushCloudUpdate(p => ({ ...p, companies: p.companies.filter(c => c.id !== id), users: p.users.filter(u => u.companyId !== id) }), `TENANT_PURGED: ${id}`),
     updateUser: async (id: string, updates: Partial<User>) => pushCloudUpdate(p => ({ ...p, users: p.users.map(u => u.id === id ? { ...u, ...updates } : u) })),
-    removeUser: async (id: string) => pushCloudUpdate(p => ({ ...p, users: p.users.filter(u => u.id !== id) })),
+    removeUser: async (id: string) => pushCloudUpdate(p => ({ ...p, users: p.users.filter(u => u.id !== id) }), `USER_PURGED: ${id}`),
+    
     markAttendance: async (uid: string, cid: string, type: 'IN' | 'OUT', coords?: any, ot?: number, manualDate?: string, manualTime?: string, siteId?: string) => {
       const date = manualDate || new Date().toISOString().split('T')[0];
       const time = manualTime || new Date().toLocaleTimeString('en-GB', { hour12: false });
+      
       pushCloudUpdate(p => {
+        // ENFORCE ONCE PER DAY RULE
+        const existing = p.attendance.find(a => a.userId === uid && a.date === date);
+
         if (type === 'IN') {
-          if (p.attendance.some(a => a.userId === uid && a.date === date)) return p;
-          return { ...p, attendance: [...p.attendance, { id: `a-${Date.now()}`, userId: uid, companyId: cid, siteId, date, checkIn: time, ...coords }] };
+          if (existing) {
+             console.warn(`Attendance conflict for user ${uid} on ${date}. Rule: Once per day.`);
+             return p;
+          }
+          return { ...p, attendance: [...p.attendance, { id: `att-${Date.now()}`, userId: uid, companyId: cid, siteId, date, checkIn: time, ...coords }] };
         } else {
-          return { ...p, attendance: p.attendance.map(a => (a.userId === uid && a.date === date && !a.checkOut) ? { ...a, checkOut: time, overtimeHours: ot } : a) };
+          // Punch OUT only if IN exists and OUT is empty for that record
+          if (existing && !existing.checkOut) {
+            return { ...p, attendance: p.attendance.map(a => a.id === existing.id ? { ...a, checkOut: time, overtimeHours: ot } : a) };
+          }
+          return p;
         }
-      }, `LOG /api/v1/telemetry/attendance - User ${uid} ${type}`);
+      }, `ATTENDANCE_LOG: ${uid} ${type} on ${date}`);
     },
-    updateAttendance: async (id: string, updates: Partial<Attendance>) => pushCloudUpdate(p => ({ ...p, attendance: p.attendance.map(a => a.id === id ? { ...a, ...updates } : a) })),
-    addWorkLog: async (log: any) => pushCloudUpdate(p => ({ ...p, workLogs: [...p.workLogs, { ...log, id: `w-${Date.now()}` }] })),
-    addFinancialRequest: async (req: any) => pushCloudUpdate(p => ({ ...p, requests: [...p.requests, { ...req, id: `r-${Date.now()}` }] })),
-    updateRequestStatus: async (id: string, status: RequestStatus) => pushCloudUpdate(p => ({ ...p, requests: p.requests.map(r => r.id === id ? { ...r, status } : r) })),
-    addSite: async (s: any) => pushCloudUpdate(p => ({ ...p, sites: [...p.sites, { ...s, id: `s-${Date.now()}` }] })),
-    removeSite: async (id: string) => pushCloudUpdate(p => ({ ...p, sites: p.sites.filter(s => s.id !== id) })),
-    addManualSalarySlip: async (slip: Omit<MonthlySalarySlip, 'id' | 'generatedDate'>) => pushCloudUpdate(p => ({ ...p, salarySlips: [...p.salarySlips, { ...slip, id: `slip-${Date.now()}`, generatedDate: new Date().toISOString() }] })),
+
+    updateAttendance: async (id: string, updates: Partial<Attendance>) => pushCloudUpdate(p => ({ ...p, attendance: p.attendance.map(a => a.id === id ? { ...a, ...updates } : a) }), `ATTENDANCE_UPDATE: ${id}`),
+
     generateMonthlySlips: async (cid: string, month: number, year: number) => {
       pushCloudUpdate(p => {
         const users = p.users.filter(u => u.companyId === cid && u.role !== UserRole.SUPER_ADMIN);
@@ -226,7 +172,7 @@ export const useStore = () => {
           });
           const adv = p.requests.filter(r => r.userId === u.id && r.type === 'ADVANCE' && r.status === RequestStatus.APPROVED && new Date(r.date).getMonth() === month).reduce((s, r) => s + r.amount, 0);
           return {
-            id: `slip-${u.id}-${month}-${year}-${Date.now()}`, userId: u.id, companyId: cid, month, year,
+            id: `slip-${u.id}-${month}-${year}`, userId: u.id, companyId: cid, month, year,
             baseAmount: Math.round(pay), overtimeAmount: Math.round(otPay), overtimeHours: Math.round(hours),
             advanceDeduction: adv, pfDeduction: u.pfEnabled ? (u.pfAmount || 0) : 0, medicalDeduction: u.medicalEnabled ? (u.medicalAmount || 0) : 0,
             totalAmount: Math.round((pay + otPay) - adv - (u.pfAmount || 0) - (u.medicalAmount || 0)),
@@ -234,15 +180,17 @@ export const useStore = () => {
           };
         });
         return { ...p, salarySlips: [...p.salarySlips.filter(s => !(s.companyId === cid && s.month === month)), ...newSlips] };
-      }, `BATCH /api/v1/payroll/generate - Enterprise ${cid}`);
+      }, `PAYROLL_EXECUTED: ${cid}`);
     },
-    updateSalaryStatus: async (id: string, status: PaymentStatus) => pushCloudUpdate(p => ({ ...p, salarySlips: p.salarySlips.map(s => s.id === id ? { ...s, status } : s) })),
+
+    addWorkLog: async (log: any) => pushCloudUpdate(p => ({ ...p, workLogs: [...p.workLogs, { ...log, id: `w-${Date.now()}` }] })),
+    addFinancialRequest: async (req: any) => pushCloudUpdate(p => ({ ...p, requests: [...p.requests, { ...req, id: `r-${Date.now()}` }] })),
+    updateRequestStatus: async (id: string, status: RequestStatus) => pushCloudUpdate(p => ({ ...p, requests: p.requests.map(r => r.id === id ? { ...r, status } : r) })),
+    addSite: async (s: any) => pushCloudUpdate(p => ({ ...p, sites: [...p.sites, { ...s, id: `s-${Date.now()}` }] })),
+    removeSite: async (id: string) => pushCloudUpdate(p => ({ ...p, sites: p.sites.filter(s => s.id !== id) })),
     updateSubscriptionPlanConfig: async (plan: SubscriptionPlan) => pushCloudUpdate(p => ({ ...p, subscriptionPlans: p.subscriptionPlans.map(sp => sp.id === plan.id ? plan : sp) })),
-    addProject: async (proj: any) => pushCloudUpdate(p => ({ ...p, projects: [...p.projects, { ...proj, id: `p-${Date.now()}` }] })),
-    addTask: async (task: any) => pushCloudUpdate(p => ({ ...p, tasks: [...p.tasks, { ...task, id: `t-${Date.now()}`, status: 'TODO' }] })),
-    updateTaskStatus: async (id: string, status: any) => pushCloudUpdate(p => ({ ...p, tasks: p.tasks.map(t => t.id === id ? { ...t, status } : t) })),
-    addLeaveRequest: async (leave: any) => pushCloudUpdate(p => ({ ...p, leaves: [...p.leaves, { ...leave, id: `l-${Date.now()}`, status: RequestStatus.PENDING, requestDate: new Date().toISOString() }] })),
-    updateLeaveStatus: async (id: string, status: RequestStatus) => pushCloudUpdate(p => ({ ...p, leaves: p.leaves.map(l => l.id === id ? { ...l, status } : l) })),
+    addManualSalarySlip: async (slip: any) => pushCloudUpdate(p => ({ ...p, salarySlips: [...p.salarySlips, { ...slip, id: `slip-m-${Date.now()}`, generatedDate: new Date().toISOString() }] })),
+    updateSalaryStatus: async (id: string, status: PaymentStatus) => pushCloudUpdate(p => ({ ...p, salarySlips: p.salarySlips.map(s => s.id === id ? { ...s, status } : s) })),
     updateUserPin: async (id: string, pin: string) => pushCloudUpdate(p => ({ ...p, users: p.users.map(u => u.id === id ? { ...u, pin } : u) })),
     updateUserPassword: async (id: string, password: string) => pushCloudUpdate(p => ({ ...p, users: p.users.map(u => u.id === id ? { ...u, password } : u) }))
   };

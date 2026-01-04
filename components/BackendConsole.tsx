@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { AppState, User, UserStatus, UserRole, Company, ServerEvent } from '../types';
+import { AppState, User, UserStatus, UserRole, Company, ServerEvent, Site } from '../types';
 import { saveState } from '../store';
 
 interface Props {
@@ -10,12 +10,17 @@ interface Props {
   removeUser: (id: string) => Promise<void>;
   removeCompany: (id: string) => Promise<void>;
   purchaseSubscription: (companyId: string, planId: string, months?: number) => void;
+  addSite: (site: Omit<Site, 'id'>) => Promise<void>;
+  removeSite: (id: string) => Promise<void>;
 }
 
-const BackendConsole: React.FC<Props> = ({ state, updateUser, updateCompanyStatus, removeUser, removeCompany, purchaseSubscription }) => {
-  const [activeView, setActiveView] = useState<'status' | 'enterprises' | 'users' | 'logs' | 'config'>('status');
+const BackendConsole: React.FC<Props> = ({ state, updateUser, updateCompanyStatus, removeUser, removeCompany, purchaseSubscription, addSite, removeSite }) => {
+  const [activeView, setActiveView] = useState<'status' | 'enterprises' | 'users' | 'sites' | 'logs' | 'config'>('status');
   const [search, setSearch] = useState('');
   const logEndRef = useRef<HTMLDivElement>(null);
+
+  // Site form state
+  const [newSite, setNewSite] = useState({ name: '', address: '', lat: 0, lng: 0, companyId: '' });
 
   useEffect(() => {
     if (activeView === 'logs') {
@@ -35,9 +40,26 @@ const BackendConsole: React.FC<Props> = ({ state, updateUser, updateCompanyStatu
     );
   }, [state.users, search]);
 
+  const filteredSites = useMemo(() => {
+    return state.sites.filter(s => 
+      s.name.toLowerCase().includes(search.toLowerCase()) || 
+      s.address?.toLowerCase().includes(search.toLowerCase())
+    );
+  }, [state.sites, search]);
+
   const handleForceSync = () => {
     alert("GLOBAL SYNC: Propagating local changes to master cluster...");
     window.location.reload();
+  };
+
+  const handleAddSite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSite.companyId) return alert("Select an Enterprise for this site.");
+    try {
+      await addSite(newSite);
+      setNewSite({ name: '', address: '', lat: 0, lng: 0, companyId: '' });
+      alert("Success: Global site registry updated.");
+    } catch (err: any) { alert(err.message); }
   };
 
   return (
@@ -57,6 +79,7 @@ const BackendConsole: React.FC<Props> = ({ state, updateUser, updateCompanyStatu
             { id: 'status', label: 'Cluster Health', icon: 'M13 10V3L4 14h7v7l9-11h-7z' },
             { id: 'enterprises', label: 'Tenant Registry', icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4' },
             { id: 'users', label: 'Global Identities', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z' },
+            { id: 'sites', label: 'Site Registry', icon: 'M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z' },
             { id: 'logs', label: 'Server Logs', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
             { id: 'config', label: 'System Config', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z' }
           ].map(item => (
@@ -82,10 +105,10 @@ const BackendConsole: React.FC<Props> = ({ state, updateUser, updateCompanyStatu
       <main className="flex-1 p-12 overflow-y-auto max-h-[85vh] relative">
         <header className="mb-12 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
            <div>
-             <h3 className="text-white font-black uppercase text-2xl tracking-tighter">{activeView} Protocol</h3>
+             <h3 className="text-white font-black uppercase text-2xl tracking-tighter">{activeView.replace(/^\w/, (c) => c.toUpperCase())} Protocol</h3>
              <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest mt-1">Live Management of System Nodes</p>
            </div>
-           {(activeView === 'enterprises' || activeView === 'users') && (
+           {(activeView === 'enterprises' || activeView === 'users' || activeView === 'sites') && (
              <div className="relative w-full md:w-80 group">
                 <input 
                   type="text" 
@@ -105,7 +128,7 @@ const BackendConsole: React.FC<Props> = ({ state, updateUser, updateCompanyStatu
                 { label: 'Cloud Enterprises', val: state.companies.length, color: 'text-blue-500', trend: '+12% this month' },
                 { label: 'Active Personnel', val: state.users.length, color: 'text-green-500', trend: 'Global Reach' },
                 { label: 'Telemetry Nodes', val: state.attendance.length + state.workLogs.length, color: 'text-orange-500', trend: 'Real-time Flow' },
-                { label: 'API Version', val: state.version, color: 'text-purple-500', trend: 'Stable v4.5' }
+                { label: 'Project Sites', val: state.sites.length, color: 'text-purple-500', trend: 'Stable v4.5' }
               ].map(s => (
                 <div key={s.label} className="bg-slate-900/50 p-8 rounded-[2rem] border border-slate-800 hover:border-slate-700 transition-all group">
                   <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-3 group-hover:text-slate-400 transition-colors">{s.label}</p>
@@ -193,6 +216,133 @@ const BackendConsole: React.FC<Props> = ({ state, updateUser, updateCompanyStatu
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
+
+        {activeView === 'users' && (
+           <div className="bg-slate-900/50 rounded-[2.5rem] border border-slate-800 overflow-hidden animate-in slide-in-from-bottom-4 duration-500">
+             <div className="overflow-x-auto">
+               <table className="w-full text-left border-collapse">
+                 <thead className="bg-slate-950 text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                   <tr>
+                     <th className="px-10 py-6">Personnel Identity</th>
+                     <th className="px-10 py-6">Enterprise Hub</th>
+                     <th className="px-10 py-6">System Role</th>
+                     <th className="px-10 py-6 text-right">Master Actions</th>
+                   </tr>
+                 </thead>
+                 <tbody className="divide-y divide-slate-800/50">
+                    {filteredUsers.map(u => {
+                      const comp = state.companies.find(c => c.id === u.companyId);
+                      return (
+                        <tr key={u.id} className="hover:bg-slate-800/30 transition-all group">
+                          <td className="px-10 py-8">
+                            <p className="text-white text-sm font-black uppercase tracking-tight">{u.name}</p>
+                            <p className="text-[9px] text-slate-500 font-bold uppercase mt-1">ID: {u.id}</p>
+                          </td>
+                          <td className="px-10 py-8">
+                             <p className="text-blue-400 text-[11px] font-black uppercase tracking-widest">{comp?.name || 'SYSTEM ROOT'}</p>
+                          </td>
+                          <td className="px-10 py-8">
+                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{u.role}</span>
+                          </td>
+                          <td className="px-10 py-8 text-right">
+                             <button 
+                               onClick={() => { if(confirm(`CRITICAL: Remove user ${u.name}?`)) removeUser(u.id); }}
+                               className="text-red-500/50 hover:text-red-500 text-[9px] font-black uppercase tracking-widest transition-colors"
+                             >
+                               Purge
+                             </button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                 </tbody>
+               </table>
+             </div>
+           </div>
+        )}
+
+        {activeView === 'sites' && (
+          <div className="space-y-10 animate-in fade-in duration-500">
+             {/* Add Site Form */}
+             <div className="bg-slate-900/50 p-10 rounded-[2.5rem] border border-slate-800">
+                <h4 className="text-white font-black uppercase text-sm tracking-tight mb-8">Establish Project Node (Site)</h4>
+                <form onSubmit={handleAddSite} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                   <div className="lg:col-span-1">
+                      <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Target Enterprise</label>
+                      <select required className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl px-4 py-3.5 text-xs font-bold outline-none focus:border-blue-500" value={newSite.companyId} onChange={e => setNewSite({...newSite, companyId: e.target.value})}>
+                        <option value="">Choose Tenant...</option>
+                        {state.companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                   </div>
+                   <div className="lg:col-span-1">
+                      <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Site Name</label>
+                      <input type="text" required placeholder="e.g. South Sector 4" className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl px-4 py-3.5 text-xs font-bold outline-none focus:border-blue-500" value={newSite.name} onChange={e => setNewSite({...newSite, name: e.target.value})} />
+                   </div>
+                   <div className="lg:col-span-1">
+                      <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Physical Address</label>
+                      <input type="text" placeholder="Project Coordinates Area" className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl px-4 py-3.5 text-xs font-bold outline-none focus:border-blue-500" value={newSite.address} onChange={e => setNewSite({...newSite, address: e.target.value})} />
+                   </div>
+                   <div>
+                      <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Latitude</label>
+                      <input type="number" step="any" required placeholder="0.00000" className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl px-4 py-3.5 text-xs font-bold outline-none focus:border-blue-500" value={newSite.lat || ''} onChange={e => setNewSite({...newSite, lat: parseFloat(e.target.value) || 0})} />
+                   </div>
+                   <div>
+                      <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Longitude</label>
+                      <input type="number" step="any" required placeholder="0.00000" className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl px-4 py-3.5 text-xs font-bold outline-none focus:border-blue-500" value={newSite.lng || ''} onChange={e => setNewSite({...newSite, lng: parseFloat(e.target.value) || 0})} />
+                   </div>
+                   <div className="flex items-end">
+                      <button type="submit" className="w-full bg-blue-600 text-white py-3.5 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-xl hover:bg-blue-500 transition-all">Enroll Site</button>
+                   </div>
+                </form>
+             </div>
+
+             {/* Site List */}
+             <div className="bg-slate-900/50 rounded-[2.5rem] border border-slate-800 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="bg-slate-950 text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                      <tr>
+                        <th className="px-10 py-6">Site Descriptor</th>
+                        <th className="px-10 py-6">Enterprise Hub</th>
+                        <th className="px-10 py-6 text-center">GPS Precision</th>
+                        <th className="px-10 py-6 text-right">Master Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/50">
+                      {filteredSites.map(s => {
+                        const comp = state.companies.find(c => c.id === s.companyId);
+                        return (
+                          <tr key={s.id} className="hover:bg-slate-800/30 transition-all group">
+                            <td className="px-10 py-8">
+                              <p className="text-white text-sm font-black uppercase tracking-tight">{s.name}</p>
+                              <p className="text-[9px] text-slate-500 font-bold uppercase mt-1">{s.address || 'No Address Data'}</p>
+                            </td>
+                            <td className="px-10 py-8">
+                               <p className="text-blue-400 text-[11px] font-black uppercase tracking-widest">{comp?.name || 'ORPHAN NODE'}</p>
+                            </td>
+                            <td className="px-10 py-8 text-center font-mono text-[10px] text-slate-400">
+                               {s.lat.toFixed(5)}, {s.lng.toFixed(5)}
+                            </td>
+                            <td className="px-10 py-8 text-right">
+                               <button 
+                                 onClick={() => { if(confirm(`Purge site ${s.name}?`)) removeSite(s.id); }}
+                                 className="text-red-500/50 hover:text-red-500 text-[9px] font-black uppercase tracking-widest transition-colors"
+                               >
+                                 Purge
+                               </button>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                      {filteredSites.length === 0 && (
+                        <tr><td colSpan={4} className="px-10 py-20 text-center text-slate-600 font-black uppercase text-xs tracking-widest">No project nodes detected in current cluster</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+             </div>
           </div>
         )}
 
