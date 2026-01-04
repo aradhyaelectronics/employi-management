@@ -1,7 +1,8 @@
 {
-  "name": "Employee Management",
-  "description": "Multi-tenant workforce & cable management APK",
+  "name": "Pragati Cloud Workforce",
+  "description": "Enterprise Field Management & Cable Telemetry APK",
   "requestFramePermissions": [
-    "geolocation"
+    "geolocation",
+    "camera"
   ]
 }

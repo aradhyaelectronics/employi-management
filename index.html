@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="mobile-web-app-capable" content="yes">
-    <title>Employee Management | Native</title>
+    <title>Pragati Cloud | Mobile</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -23,13 +23,25 @@
         font-family: 'Inter', sans-serif;
         background-color: #f8fafc;
         -webkit-tap-highlight-color: transparent;
-        overscroll-behavior-y: none;
+        -webkit-touch-callout: none;
+        user-select: none;
+        overscroll-behavior-y: contain;
         overflow-x: hidden;
       }
       #root {
         min-height: 100vh;
         display: flex;
         flex-direction: column;
+      }
+      /* Android Ripple Effect Emulation */
+      .active-state:active {
+        background-color: rgba(0, 0, 0, 0.05);
+        transform: scale(0.98);
+      }
+      /* Mobile Scrollbar Hide */
+      .custom-scrollbar::-webkit-scrollbar {
+        width: 0px;
+        background: transparent;
       }
       /* Professional Splash Screen */
       #splash {
@@ -57,6 +69,10 @@
         0% { transform: rotate(0deg); }
         100% { transform: rotate(360deg); }
       }
+      /* SafeArea padding for bottom nav */
+      .safe-bottom-padding {
+        padding-bottom: calc(env(safe-area-inset-bottom) + 5rem);
+      }
     </style>
   <script type="importmap">
 {
@@ -73,7 +89,7 @@
   <body class="safe-top">
     <div id="splash">
       <div class="loader"></div>
-      <p style="color: white; font-weight: 900; margin-top: 20px; letter-spacing: 0.2em; font-size: 10px; text-transform: uppercase;">Employee Management Initializing</p>
+      <p style="color: white; font-weight: 900; margin-top: 20px; letter-spacing: 0.2em; font-size: 10px; text-transform: uppercase;">PRAGATI CLOUD INITIALIZING</p>
     </div>
     <div id="root"></div>
     <script>
@@ -82,7 +98,7 @@
         setTimeout(() => {
           splash.style.opacity = '0';
           splash.style.visibility = 'hidden';
-        }, 1000);
+        }, 1200);
       });
     </script>
   </body>

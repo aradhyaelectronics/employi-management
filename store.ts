@@ -45,6 +45,7 @@ const DEFAULT_STATE: AppState = {
   ],
   salarySlips: [], 
   invoices: [],
+  apkUrl: 'https://storage.googleapis.com/pragati-cloud/builds/pragati-v4.apk',
   systemLogs: [{ id: 'evt-0', timestamp: new Date().toISOString(), type: 'INFO', message: 'Cloud Server Initialized', source: 'CORE' }],
   integrations: {
     razorpayKeyId: 'rzp_test_58Xm92p1Yk87X',
@@ -103,6 +104,10 @@ export const useStore = () => {
     
     updateIntegrations: (updates: Partial<IntegrationConfig>) => {
       pushCloudUpdate(p => ({ ...p, integrations: { ...p.integrations, ...updates } }), 'INTEGRATION_CONFIG_UPDATED');
+    },
+
+    updateApkUrl: (url: string) => {
+      pushCloudUpdate(p => ({ ...p, apkUrl: url }), `APK_DISTRIBUTION_UPDATED: ${url}`);
     },
 
     getAiSystemContext: (companyId?: string) => {

@@ -220,5 +220,6 @@ export interface AppState {
   systemLogs: ServerEvent[];
   integrations: IntegrationConfig;
   invoices: Invoice[];
+  apkUrl: string;
   version: string;
 }
