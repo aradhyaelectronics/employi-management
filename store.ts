@@ -2,12 +2,12 @@
 import React from 'react';
 import { 
   AppState, User, Company, UserRole, UserStatus, RequestStatus, 
-  WorkLog, FinancialRequest, MonthlySalarySlip, 
+  WorkLog, FinancialRequest, MonthlySalarySlip, ServerEvent,
   PaymentStatus, Project, Task, LeaveRequest, SalaryType, SubscriptionPlan, Attendance 
 } from './types';
 
-const STORAGE_KEY = 'employeemanagement_data_v3';
-const CURRENT_VERSION = '4.2.2-stable-sync';
+const STORAGE_KEY = 'employeemanagement_cloud_v4';
+const CURRENT_VERSION = '4.5.0-dynamic-cloud';
 const STANDARD_SHIFT_HOURS = 8;
 
 const normalizeMobile = (num: string | undefined): string => {
@@ -29,7 +29,6 @@ const MASTER_ADMIN: User = {
   pin: '1234'
 };
 
-// Default empty state for the current version
 const DEFAULT_STATE: AppState = {
   users: [MASTER_ADMIN], 
   companies: [], 
@@ -42,9 +41,11 @@ const DEFAULT_STATE: AppState = {
   requests: [], 
   subscriptionPlans: [
     { id: 'p-free', name: 'Standard (Free)', price: 0, durationDays: 365, userLimit: 5, features: ['Basic Attendance', 'Work Logs', 'Manual Payroll'] },
-    { id: 'p-pro', name: 'Enterprise Pro', price: 4999, durationDays: 30, userLimit: 50, features: ['Advanced Payroll', 'Geofencing', 'Task Management', 'Leave Portal', 'AI Audits'] }
+    { id: 'p-pro', name: 'Enterprise Pro', price: 4999, durationDays: 30, userLimit: 50, features: ['Advanced Payroll', 'Geofencing', 'Task Management', 'Leave Portal', 'AI Audits'] },
+    { id: 'p-ultra', name: 'Elite Infrastructure', price: 12999, durationDays: 30, userLimit: 500, features: ['24/7 Priority Support', 'Dedicated Cloud Node', 'Custom API Access'] }
   ],
   salarySlips: [], 
+  systemLogs: [{ id: 'evt-0', timestamp: new Date().toISOString(), type: 'INFO', message: 'Cloud Server Initialized', source: 'CORE' }],
   version: CURRENT_VERSION
 };
 
@@ -55,49 +56,26 @@ const getInitialState = (): AppState => {
 
     const parsed = JSON.parse(stored);
     
-    // SMART MERGE LOGIC: 
-    // This ensures that when you add new features (keys) in code, 
-    // they are added to the user's existing data without deleting old data.
-    const migratedState = { ...DEFAULT_STATE, ...parsed };
+    // Non-destructive update: Merge existing data with default containers
+    const mergedState: AppState = { 
+      ...DEFAULT_STATE, 
+      ...parsed,
+      version: CURRENT_VERSION 
+    };
 
-    // Ensure critical arrays are present (Safety against older versions)
-    migratedState.users = Array.isArray(parsed.users) ? parsed.users : [MASTER_ADMIN];
-    migratedState.projects = Array.isArray(parsed.projects) ? parsed.projects : [];
-    migratedState.tasks = Array.isArray(parsed.tasks) ? parsed.tasks : [];
-    migratedState.leaves = Array.isArray(parsed.leaves) ? parsed.leaves : [];
-    migratedState.salarySlips = Array.isArray(parsed.salarySlips) ? parsed.salarySlips : [];
-    
-    // Always ensure Master Admin exists for recovery
-    const hasMaster = migratedState.users.some((u: User) => u.id === MASTER_ADMIN.id || u.email === MASTER_ADMIN.email);
-    if (!hasMaster) {
-      migratedState.users.unshift(MASTER_ADMIN);
-    } else {
-      // Update Master Admin details (like phone number) even in existing data
-      migratedState.users = migratedState.users.map((u: User) => 
-        u.id === MASTER_ADMIN.id ? { ...u, mobile: MASTER_ADMIN.mobile } : u
-      );
+    // Fix array structures if corrupted
+    mergedState.users = Array.isArray(parsed.users) ? parsed.users : [MASTER_ADMIN];
+    mergedState.companies = Array.isArray(parsed.companies) ? parsed.companies : [];
+    mergedState.systemLogs = Array.isArray(parsed.systemLogs) ? parsed.systemLogs : DEFAULT_STATE.systemLogs;
+
+    // Failsafe: Re-inject Master if missing
+    if (!mergedState.users.some(u => u.id === MASTER_ADMIN.id)) {
+      mergedState.users.unshift(MASTER_ADMIN);
     }
 
-    // Update version to latest
-    migratedState.version = CURRENT_VERSION;
-    
-    return migratedState;
+    return mergedState;
   } catch (e) {
-    console.error("Critical: Local storage corrupted. Salvaging with default state.");
     return DEFAULT_STATE;
-  }
-};
-
-const calculateHours = (start: string, end: string): number => {
-  if (!start || !end) return 0;
-  try {
-    const s = start.split(':').map(Number);
-    const e = end.split(':').map(Number);
-    const startMins = s[0] * 60 + s[1];
-    const endMins = e[0] * 60 + e[1];
-    return Math.max(0, (endMins - startMins) / 60);
-  } catch {
-    return 0;
   }
 };
 
@@ -110,159 +88,162 @@ export const saveState = (state: AppState) => {
 export const useStore = () => {
   const [state, setState] = React.useState<AppState>(getInitialState());
 
-  const updateState = (updater: (prev: AppState) => AppState) => {
+  // Cloud Simulation Layer: All updates logged as server events
+  const pushCloudUpdate = (updater: (prev: AppState) => AppState, logMsg?: string) => {
     setState(prev => {
       const next = updater(prev);
+      if (logMsg) {
+        const newLog: ServerEvent = {
+          id: `evt-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          type: 'SYNC',
+          message: logMsg,
+          source: 'REMOTE_SYNC'
+        };
+        next.systemLogs = [newLog, ...next.systemLogs].slice(0, 100);
+      }
       saveState(next);
       return next;
     });
   };
 
-  const resetSystem = () => {
-    if (confirm("This will PERMANENTLY delete all data. Continue?")) {
-      localStorage.removeItem(STORAGE_KEY);
-      window.location.reload();
-    }
+  const calculateHours = (start: string, end: string): number => {
+    if (!start || !end) return 0;
+    try {
+      const s = start.split(':').map(Number);
+      const e = end.split(':').map(Number);
+      return Math.max(0, ((e[0] * 60 + e[1]) - (s[0] * 60 + s[1])) / 60);
+    } catch { return 0; }
   };
 
   return {
     state,
-    resetSystem,
+    resetSystem: () => {
+      localStorage.removeItem(STORAGE_KEY);
+      window.location.reload();
+    },
     authenticate: (identifier: string, secret: string): User | null => {
       const cleanId = identifier.trim().toLowerCase();
       const cleanMobileId = normalizeMobile(cleanId);
       const cleanSecret = secret.trim();
 
-      return state.users.find(u => {
+      const user = state.users.find(u => {
         const storedEmail = (u.email || '').trim().toLowerCase();
         const storedMobile = normalizeMobile(u.mobile);
-        const storedPassword = (u.password || '').trim();
-        const storedPin = (u.pin || '').trim();
-        
         return (storedEmail === cleanId || (cleanMobileId !== '' && storedMobile === cleanMobileId)) 
-               && (storedPassword === cleanSecret || storedPin === cleanSecret);
-      }) || null;
+               && (u.password === cleanSecret || u.pin === cleanSecret);
+      });
+
+      if (user && user.role !== UserRole.SUPER_ADMIN) {
+        const comp = state.companies.find(c => c.id === user.companyId);
+        if (comp?.status === UserStatus.BLOCKED) throw new Error("Enterprise Suspended.");
+      }
+      return user || null;
     },
 
+    // Dynamic Entity Management
     addUser: async (u: any) => {
-      const cleanMobile = u.mobile ? u.mobile.trim() : '';
-      const normMobile = normalizeMobile(cleanMobile);
-      const cleanEmail = (u.email || '').trim().toLowerCase();
-      
-      if (state.users.some(ex => (cleanEmail && ex.email.toLowerCase() === cleanEmail) || (normMobile && normalizeMobile(ex.mobile) === normMobile))) {
-        throw new Error("ID Conflict: Email or Mobile already registered.");
+      const normMobile = normalizeMobile(u.mobile);
+      if (state.users.some(ex => (u.email && ex.email.toLowerCase() === u.email.toLowerCase()) || (normMobile && normalizeMobile(ex.mobile) === normMobile))) {
+        throw new Error("Conflict: Identity already in registry.");
       }
-
-      const newUser = { 
-        status: UserStatus.PENDING, 
-        ...u, 
-        mobile: cleanMobile,
-        email: cleanEmail,
-        id: `u-${Date.now()}` 
-      };
-      updateState(p => ({ ...p, users: [...p.users, newUser] }));
+      const newUser = { ...u, id: `u-${Date.now()}`, status: u.status || UserStatus.ACTIVE };
+      pushCloudUpdate(p => ({ ...p, users: [...p.users, newUser] }), `POST /api/v1/users/${newUser.id} - Created`);
       return newUser;
     },
-    updateUser: async (id: string, updates: Partial<User>) => {
-      updateState(p => ({ ...p, users: p.users.map(u => u.id === id ? { ...u, ...updates } : u) }));
-    },
-    removeUser: async (id: string) => {
-      updateState(p => ({ ...p, users: p.users.filter(u => u.id !== id) }));
-    },
+
     addCompany: async (name: string) => {
-      const c = { id: `c-${Date.now()}`, name, createdAt: new Date().toISOString(), subscriptionPlanId: 'p-free' };
-      updateState(p => ({ ...p, companies: [...p.companies, c] }));
+      const c: Company = { 
+        id: `c-${Date.now()}`, 
+        name, 
+        createdAt: new Date().toISOString(), 
+        status: UserStatus.ACTIVE,
+        subscriptionPlanId: 'p-free' 
+      };
+      pushCloudUpdate(p => ({ ...p, companies: [...p.companies, c] }), `POST /api/v1/enterprises - New Org: ${name}`);
       return c;
     },
-    addProject: async (proj: Omit<Project, 'id'>) => {
-      updateState(p => ({ ...p, projects: [...p.projects, { ...proj, id: `p-${Date.now()}` }] }));
+
+    updateCompanyStatus: async (id: string, status: UserStatus) => {
+      pushCloudUpdate(p => ({ ...p, companies: p.companies.map(c => c.id === id ? { ...c, status } : c) }), `PATCH /api/v1/enterprises/${id}/status - ${status}`);
     },
-    addTask: async (task: Omit<Task, 'id'>) => {
-      updateState(p => ({ ...p, tasks: [...p.tasks, { ...task, id: `t-${Date.now()}`, status: 'TODO' }] }));
-    },
-    updateTaskStatus: async (id: string, status: 'TODO' | 'IN_PROGRESS' | 'DONE') => {
-      updateState(p => ({ ...p, tasks: p.tasks.map(t => t.id === id ? { ...t, status } : t) }));
-    },
-    addLeaveRequest: async (leave: Omit<LeaveRequest, 'id' | 'status' | 'requestDate'>) => {
-      const req = { ...leave, id: `l-${Date.now()}`, status: RequestStatus.PENDING, requestDate: new Date().toISOString() };
-      updateState(p => ({ ...p, leaves: [...p.leaves, req] }));
-    },
-    updateLeaveStatus: async (id: string, status: RequestStatus) => {
-      updateState(p => ({ ...p, leaves: p.leaves.map(l => l.id === id ? { ...l, status } : l) }));
-    },
-    markAttendance: async (uid: string, cid: string, type: 'IN' | 'OUT', coords?: any, ot?: number, manualDate?: string, manualTime?: string, siteId?: string) => {
-      const date = manualDate || new Date().toISOString().split('T')[0];
-      const time = manualTime || new Date().toLocaleTimeString('en-GB', { hour12: false });
-      
-      updateState(p => {
-        if (type === 'IN') {
-          if (p.attendance.some(a => a.userId === uid && a.date === date)) return p;
-          return { ...p, attendance: [...p.attendance, { id: `a-${Date.now()}`, userId: uid, companyId: cid, siteId, date, checkIn: time, ...coords }] };
-        } else {
-          return { ...p, attendance: p.attendance.map(a => (a.userId === uid && a.date === date && !a.checkOut) ? { ...a, checkOut: time, overtimeHours: ot } : a) };
-        }
-      });
-    },
-    updateAttendance: async (id: string, updates: Partial<Attendance>) => {
-      updateState(p => ({ ...p, attendance: p.attendance.map(a => a.id === id ? { ...a, ...updates } : a) }));
-    },
-    addWorkLog: async (log: any) => updateState(p => ({ ...p, workLogs: [...p.workLogs, { ...log, id: `w-${Date.now()}` }] })),
-    updateUserPin: async (id: string, pin: string) => updateState(p => ({ ...p, users: p.users.map(u => u.id === id ? { ...u, pin } : u) })),
-    updateUserPassword: async (id: string, password: string) => {
-      updateState(p => ({ ...p, users: p.users.map(u => u.id === id ? { ...u, password } : u) }));
-    },
-    addFinancialRequest: async (req: any) => updateState(p => ({ ...p, requests: [...p.requests, { ...req, id: `r-${Date.now()}` }] })),
-    updateRequestStatus: async (id: string, status: RequestStatus) => updateState(p => ({ ...p, requests: p.requests.map(r => r.id === id ? { ...r, status } : r) })),
-    addSite: async (s: any) => updateState(p => ({ ...p, sites: [...p.sites, { ...s, id: `s-${Date.now()}` }] })),
-    removeSite: async (id: string) => updateState(p => ({ ...p, sites: p.sites.filter(s => s.id !== id) })),
-    removeCompany: async (id: string) => updateState(p => ({ ...p, companies: p.companies.filter(c => c.id !== id) }));
+
     purchaseSubscription: async (cid: string, pid: string, months: number = 1) => {
-      updateState(p => ({ 
+      pushCloudUpdate(p => ({ 
         ...p, 
         companies: p.companies.map(c => c.id === cid ? { 
           ...c, 
           subscriptionPlanId: pid, 
           subscriptionExpiry: new Date(Date.now() + (months * 30) * 86400000).toISOString() 
         } : c) 
-      }));
+      }), `PUT /api/v1/subscriptions/${cid} - Tier Shift to ${pid}`);
     },
-    updateSubscriptionPlanConfig: async (plan: SubscriptionPlan) => {
-      updateState(p => ({ ...p, subscriptionPlans: p.subscriptionPlans.map(sp => sp.id === plan.id ? plan : sp) }));
+
+    removeCompany: async (id: string) => {
+      pushCloudUpdate(p => ({ 
+        ...p, 
+        companies: p.companies.filter(c => c.id !== id),
+        users: p.users.filter(u => u.companyId !== id)
+      }), `DELETE /api/v1/enterprises/${id} - Purged from Cluster`);
     },
-    addManualSalarySlip: async (slip: Omit<MonthlySalarySlip, 'id' | 'generatedDate'>) => {
-      updateState(p => ({ ...p, salarySlips: [...p.salarySlips, { ...slip, id: `slip-${Date.now()}`, generatedDate: new Date().toISOString() }] }));
+
+    // Standard Operations (Passed to components)
+    updateUser: async (id: string, updates: Partial<User>) => pushCloudUpdate(p => ({ ...p, users: p.users.map(u => u.id === id ? { ...u, ...updates } : u) })),
+    removeUser: async (id: string) => pushCloudUpdate(p => ({ ...p, users: p.users.filter(u => u.id !== id) })),
+    markAttendance: async (uid: string, cid: string, type: 'IN' | 'OUT', coords?: any, ot?: number, manualDate?: string, manualTime?: string, siteId?: string) => {
+      const date = manualDate || new Date().toISOString().split('T')[0];
+      const time = manualTime || new Date().toLocaleTimeString('en-GB', { hour12: false });
+      pushCloudUpdate(p => {
+        if (type === 'IN') {
+          if (p.attendance.some(a => a.userId === uid && a.date === date)) return p;
+          return { ...p, attendance: [...p.attendance, { id: `a-${Date.now()}`, userId: uid, companyId: cid, siteId, date, checkIn: time, ...coords }] };
+        } else {
+          return { ...p, attendance: p.attendance.map(a => (a.userId === uid && a.date === date && !a.checkOut) ? { ...a, checkOut: time, overtimeHours: ot } : a) };
+        }
+      }, `LOG /api/v1/telemetry/attendance - User ${uid} ${type}`);
     },
+    updateAttendance: async (id: string, updates: Partial<Attendance>) => pushCloudUpdate(p => ({ ...p, attendance: p.attendance.map(a => a.id === id ? { ...a, ...updates } : a) })),
+    addWorkLog: async (log: any) => pushCloudUpdate(p => ({ ...p, workLogs: [...p.workLogs, { ...log, id: `w-${Date.now()}` }] })),
+    addFinancialRequest: async (req: any) => pushCloudUpdate(p => ({ ...p, requests: [...p.requests, { ...req, id: `r-${Date.now()}` }] })),
+    updateRequestStatus: async (id: string, status: RequestStatus) => pushCloudUpdate(p => ({ ...p, requests: p.requests.map(r => r.id === id ? { ...r, status } : r) })),
+    addSite: async (s: any) => pushCloudUpdate(p => ({ ...p, sites: [...p.sites, { ...s, id: `s-${Date.now()}` }] })),
+    removeSite: async (id: string) => pushCloudUpdate(p => ({ ...p, sites: p.sites.filter(s => s.id !== id) })),
+    addManualSalarySlip: async (slip: Omit<MonthlySalarySlip, 'id' | 'generatedDate'>) => pushCloudUpdate(p => ({ ...p, salarySlips: [...p.salarySlips, { ...slip, id: `slip-${Date.now()}`, generatedDate: new Date().toISOString() }] })),
     generateMonthlySlips: async (cid: string, month: number, year: number) => {
-      updateState(p => {
-        const companyUsers = p.users.filter(u => u.companyId === cid && u.role !== UserRole.SUPER_ADMIN);
-        const newSlips: MonthlySalarySlip[] = companyUsers.map(u => {
-          const monthAttendance = p.attendance.filter(a => a.userId === u.id && new Date(a.date).getMonth() === month && new Date(a.date).getFullYear() === year);
+      pushCloudUpdate(p => {
+        const users = p.users.filter(u => u.companyId === cid && u.role !== UserRole.SUPER_ADMIN);
+        const newSlips: MonthlySalarySlip[] = users.map(u => {
+          const monthAtt = p.attendance.filter(a => a.userId === u.id && new Date(a.date).getMonth() === month && new Date(a.date).getFullYear() === year);
           let hourlyRate = u.salaryType === SalaryType.DAILY_WAGE ? (u.salaryAmount || 0) / STANDARD_SHIFT_HOURS : ((u.salaryAmount || 0) / 30) / STANDARD_SHIFT_HOURS;
-          let totalCalculatedPay = 0, totalOtPay = 0, totalHoursWorked = 0;
-          monthAttendance.forEach(att => {
+          let pay = 0, otPay = 0, hours = 0;
+          monthAtt.forEach(att => {
             if (att.checkIn && att.checkOut) {
-              const hours = calculateHours(att.checkIn, att.checkOut);
-              totalHoursWorked += hours;
-              totalCalculatedPay += Math.min(hours, STANDARD_SHIFT_HOURS) * hourlyRate;
-              totalOtPay += (Math.max(0, hours - STANDARD_SHIFT_HOURS) + (att.overtimeHours || 0)) * (u.overtimeRate || hourlyRate);
+              const h = calculateHours(att.checkIn, att.checkOut);
+              hours += h;
+              pay += Math.min(h, STANDARD_SHIFT_HOURS) * hourlyRate;
+              otPay += (Math.max(0, h - STANDARD_SHIFT_HOURS) + (att.overtimeHours || 0)) * (u.overtimeRate || hourlyRate);
             }
           });
-          const advanceDeduction = p.requests.filter(r => r.userId === u.id && r.type === 'ADVANCE' && r.status === RequestStatus.APPROVED && new Date(r.date).getMonth() === month && new Date(r.date).getFullYear() === year).reduce((sum, r) => sum + r.amount, 0);
-          const pfDeduction = u.pfEnabled ? (u.pfAmount || 0) : 0;
-          const medicalDeduction = u.medicalEnabled ? (u.medicalAmount || 0) : 0;
+          const adv = p.requests.filter(r => r.userId === u.id && r.type === 'ADVANCE' && r.status === RequestStatus.APPROVED && new Date(r.date).getMonth() === month).reduce((s, r) => s + r.amount, 0);
           return {
             id: `slip-${u.id}-${month}-${year}-${Date.now()}`, userId: u.id, companyId: cid, month, year,
-            baseAmount: Math.round(totalCalculatedPay), overtimeAmount: Math.round(totalOtPay), overtimeHours: Math.round(totalHoursWorked),
-            advanceDeduction, pfDeduction, medicalDeduction,
-            totalAmount: Math.round((totalCalculatedPay + totalOtPay) - advanceDeduction - pfDeduction - medicalDeduction),
+            baseAmount: Math.round(pay), overtimeAmount: Math.round(otPay), overtimeHours: Math.round(hours),
+            advanceDeduction: adv, pfDeduction: u.pfEnabled ? (u.pfAmount || 0) : 0, medicalDeduction: u.medicalEnabled ? (u.medicalAmount || 0) : 0,
+            totalAmount: Math.round((pay + otPay) - adv - (u.pfAmount || 0) - (u.medicalAmount || 0)),
             status: PaymentStatus.UNPAID, generatedDate: new Date().toISOString()
           };
         });
-        return { ...p, salarySlips: [...p.salarySlips.filter(s => !(s.companyId === cid && s.month === month && s.year === year)), ...newSlips] };
-      });
+        return { ...p, salarySlips: [...p.salarySlips.filter(s => !(s.companyId === cid && s.month === month)), ...newSlips] };
+      }, `BATCH /api/v1/payroll/generate - Enterprise ${cid}`);
     },
-    updateSalaryStatus: async (slipId: string, status: PaymentStatus) => {
-      updateState(p => ({ ...p, salarySlips: p.salarySlips.map(s => s.id === slipId ? { ...s, status } : s) }));
-    }
+    updateSalaryStatus: async (id: string, status: PaymentStatus) => pushCloudUpdate(p => ({ ...p, salarySlips: p.salarySlips.map(s => s.id === id ? { ...s, status } : s) })),
+    updateSubscriptionPlanConfig: async (plan: SubscriptionPlan) => pushCloudUpdate(p => ({ ...p, subscriptionPlans: p.subscriptionPlans.map(sp => sp.id === plan.id ? plan : sp) })),
+    addProject: async (proj: any) => pushCloudUpdate(p => ({ ...p, projects: [...p.projects, { ...proj, id: `p-${Date.now()}` }] })),
+    addTask: async (task: any) => pushCloudUpdate(p => ({ ...p, tasks: [...p.tasks, { ...task, id: `t-${Date.now()}`, status: 'TODO' }] })),
+    updateTaskStatus: async (id: string, status: any) => pushCloudUpdate(p => ({ ...p, tasks: p.tasks.map(t => t.id === id ? { ...t, status } : t) })),
+    addLeaveRequest: async (leave: any) => pushCloudUpdate(p => ({ ...p, leaves: [...p.leaves, { ...leave, id: `l-${Date.now()}`, status: RequestStatus.PENDING, requestDate: new Date().toISOString() }] })),
+    updateLeaveStatus: async (id: string, status: RequestStatus) => pushCloudUpdate(p => ({ ...p, leaves: p.leaves.map(l => l.id === id ? { ...l, status } : l) })),
+    updateUserPin: async (id: string, pin: string) => pushCloudUpdate(p => ({ ...p, users: p.users.map(u => u.id === id ? { ...u, pin } : u) })),
+    updateUserPassword: async (id: string, password: string) => pushCloudUpdate(p => ({ ...p, users: p.users.map(u => u.id === id ? { ...u, password } : u) }))
   };
 };

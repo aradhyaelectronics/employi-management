@@ -35,6 +35,14 @@ export enum RequestStatus {
   REJECTED = 'REJECTED'
 }
 
+export interface ServerEvent {
+  id: string;
+  timestamp: string;
+  type: 'INFO' | 'WARNING' | 'CRITICAL' | 'AUTH' | 'SYNC';
+  message: string;
+  source: string;
+}
+
 export enum WorkType {
   CABLE_LAYING = 'Cable Laying',
   SPLICING = 'Splicing/Jointing',
@@ -100,6 +108,7 @@ export interface Company {
   name: string;
   address?: string;
   createdAt: string;
+  status: UserStatus; 
   subscriptionPlanId?: string;
   subscriptionExpiry?: string;
 }
@@ -117,7 +126,7 @@ export interface Attendance {
   id: string;
   userId: string;
   companyId: string;
-  siteId?: string; // Linked to work site
+  siteId?: string; 
   date: string;
   checkIn: string;
   checkOut?: string;
@@ -130,12 +139,12 @@ export interface WorkLog {
   id: string;
   userId: string;
   companyId: string;
-  siteId?: string; // Linked to physical site
+  siteId?: string; 
   date: string;
   installationDate: string;
-  taskId?: string; // Linked to formal tasks
-  workType: string; // Dynamic work classification
-  subCategory: string; // Size or specific specification
+  taskId?: string; 
+  workType: string; 
+  subCategory: string; 
   meters: number;
   description: string;
 }
@@ -189,5 +198,6 @@ export interface AppState {
   requests: FinancialRequest[];
   subscriptionPlans: SubscriptionPlan[];
   salarySlips: MonthlySalarySlip[];
+  systemLogs: ServerEvent[];
   version: string;
 }

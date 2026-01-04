@@ -29,6 +29,7 @@ const App: React.FC = () => {
     updateUserPin,
     updateUserPassword,
     addCompany, 
+    updateCompanyStatus,
     addSite, 
     removeSite, 
     markAttendance,
@@ -55,7 +56,7 @@ const App: React.FC = () => {
   });
 
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [isLogin, setIsLogin] = useState(state.users.length > 0);
+  const [isLogin, setIsLogin] = useState(true);
   const [isSystemLogin, setIsSystemLogin] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
@@ -105,10 +106,9 @@ const App: React.FC = () => {
           color: 'bg-slate-950',
           nav: [
             { id: 'dashboard', label: 'Global Overview', icon: ICONS.Dashboard },
-            { id: 'enterprise', label: 'Enterprise Registry', icon: ICONS.Users },
+            { id: 'backend', label: 'Master Backend', icon: ICONS.Dashboard },
             { id: 'subscription', label: 'Plan Architect', icon: ICONS.Rocket },
-            { id: 'backend', label: 'Backend Ops', icon: ICONS.Dashboard },
-            { id: 'users', label: 'Identity Control', icon: ICONS.Shield },
+            { id: 'users', label: 'Global Users', icon: ICONS.Shield },
             ...commonNav
           ]
         };
@@ -157,7 +157,6 @@ const App: React.FC = () => {
     setIsAuthenticating(true);
     setAuthError(null);
 
-    // Fast feedback delay
     await new Promise(r => setTimeout(r, 100));
 
     const idInput = formData.identifier.trim();
@@ -170,23 +169,26 @@ const App: React.FC = () => {
     }
 
     if (isLogin) {
-      const user = authenticate(idInput, secretInput);
-
-      if (user) {
-        if (user.status === UserStatus.PENDING) {
-          setAuthError('VERIFICATION PENDING: Admin approval required.');
-          setIsAuthenticating(false);
-          return;
+      try {
+        const user = authenticate(idInput, secretInput);
+        if (user) {
+          if (user.status === UserStatus.PENDING) {
+            setAuthError('VERIFICATION PENDING: Admin approval required.');
+            setIsAuthenticating(false);
+            return;
+          }
+          if (user.status === UserStatus.BLOCKED) {
+            setAuthError('ACCESS DENIED: Account suspended.');
+            setIsAuthenticating(false);
+            return;
+          }
+          setCurrentUser(user);
+          setFormData({ identifier: '', secret: '', name: '', companyName: '' });
+        } else { 
+          setAuthError('AUTH FAILURE: Invalid Credentials.'); 
         }
-        if (user.status === UserStatus.BLOCKED) {
-          setAuthError('ACCESS DENIED: Account suspended.');
-          setIsAuthenticating(false);
-          return;
-        }
-        setCurrentUser(user);
-        setFormData({ identifier: '', secret: '', name: '', companyName: '' });
-      } else { 
-        setAuthError('AUTH FAILURE: Invalid Credentials or formatting error.'); 
+      } catch (err: any) {
+        setAuthError(err.message);
       }
     } else {
       try {
@@ -220,7 +222,7 @@ const App: React.FC = () => {
   };
 
   const handleForceReset = () => {
-    if (confirm("DANGER: This will delete ALL local data and restore the default Master Admin account. Proceed?")) {
+    if (confirm("DANGER: This will delete ALL local data. Proceed?")) {
       resetSystem();
     }
   };
@@ -257,12 +259,7 @@ const App: React.FC = () => {
         <div className="mt-8 pt-6 border-t border-gray-50 flex flex-col gap-2 w-full">
            <button onClick={() => setIsLogin(!isLogin)} className="w-full text-gray-400 font-black text-[9px] uppercase tracking-widest hover:text-blue-900 transition-colors">{isLogin ? 'Create New Account' : 'Return to Login'}</button>
            <button onClick={() => { setIsSystemLogin(!isSystemLogin); setIsLogin(true); }} className="w-full text-gray-300 font-black text-[8px] uppercase tracking-[0.4em] hover:text-slate-900 transition-colors">Internal Ops Access</button>
-           <button onClick={handleForceReset} className="w-full text-red-300 font-black text-[7px] uppercase tracking-[0.2em] hover:text-red-500 transition-colors mt-2">Corrupted Login? Force System Reset</button>
-        </div>
-        
-        {/* Footer in Login View */}
-        <div className="mt-8 text-center opacity-30">
-          <p className="text-[7px] font-black uppercase tracking-[0.5em] text-gray-500">Developed by Pragati Enterprises</p>
+           <button onClick={handleForceReset} className="w-full text-red-300 font-black text-[7px] uppercase tracking-[0.2em] hover:text-red-500 transition-colors mt-2">Force System Reset</button>
         </div>
       </div>
     </div>
@@ -291,26 +288,18 @@ const App: React.FC = () => {
         </nav>
         <div className="pt-6 border-t border-white/10">
           <button onClick={() => setCurrentUser(null)} className="w-full py-3 bg-red-600/20 text-red-100 hover:bg-red-600/40 rounded-xl font-black uppercase text-[9px] transition-colors">Terminate Session</button>
-          
-          {/* Sidebar Footer */}
-          <div className="mt-6 text-center opacity-30">
-            <p className="text-[7px] font-black uppercase tracking-[0.4em] text-white">Pragati Enterprises</p>
-          </div>
         </div>
       </aside>
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
         <header className="sticky top-0 z-[60] bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between">
           <div className="flex items-center space-x-4">
-            {activeTab !== 'dashboard' && (
-              <button 
-                onClick={() => setActiveTab('dashboard')} 
-                className="flex items-center space-x-2 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-xl text-[10px] font-black text-gray-600 uppercase transition-all"
-              >
-                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={3} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-                <span>Back</span>
-              </button>
-            )}
             <h1 className="text-lg font-black text-gray-900 uppercase tracking-tighter">{panelConfig.nav.find(i => i.id === activeTab)?.label || 'Overview'}</h1>
+            {currentUser.role === UserRole.SUPER_ADMIN && (
+              <div className="hidden lg:flex items-center space-x-2 px-3 py-1 bg-green-50 rounded-full border border-green-100">
+                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                <span className="text-[8px] font-black text-green-700 uppercase tracking-widest">Master Cloud Sync Active</span>
+              </div>
+            )}
           </div>
           <div className="flex items-center space-x-4">
              <div className="text-right hidden sm:block">
@@ -323,33 +312,16 @@ const App: React.FC = () => {
         <main className="flex-1 p-6 md:p-12 overflow-y-auto mb-20 md:mb-0">
           <div className="max-w-7xl mx-auto min-h-[70vh]">
             {activeTab === 'dashboard' && <Dashboard user={currentUser} state={state} updatePassword={updateUserPassword} />}
-            {activeTab === 'projects' && <ProjectConsole user={currentUser} state={state} addProject={addProject} addTask={addTask} updateTaskStatus={updateTaskStatus} />}
             {activeTab === 'attendance' && <AttendancePanel user={currentUser} state={state} markAttendance={markAttendance} updateAttendance={updateAttendance} addSite={addSite} removeSite={removeSite} />}
-            {activeTab === 'leaves' && <LeavePortal user={currentUser} state={state} addLeaveRequest={addLeaveRequest} updateLeaveStatus={updateLeaveStatus} />}
             {activeTab === 'work' && <WorkTracking user={currentUser} state={state} addWorkLog={addWorkLog} />}
             {activeTab === 'financials' && <FinancialManagement user={currentUser} state={state} addRequest={addFinancialRequest} updateStatus={updateRequestStatus} generateMonthlySlips={generateMonthlySlips} addManualSalarySlip={addManualSalarySlip} updateSalaryStatus={updateSalaryStatus} />}
             {activeTab === 'users' && <UserManagement user={currentUser} state={state} addUser={addUser} updateUser={updateUser} removeUser={removeUser} />}
             {activeTab === 'subscription' && <SubscriptionCenter user={currentUser} state={state} updatePlan={updateSubscriptionPlanConfig} purchasePlan={purchaseSubscription} removeUser={removeUser} />}
-            {activeTab === 'enterprise' && <CompanyManagement state={state} removeCompany={removeCompany} purchaseSubscription={purchaseSubscription} />}
-            {activeTab === 'backend' && <BackendConsole state={state} updateUser={updateUser} removeUser={removeUser} />}
+            {activeTab === 'backend' && <BackendConsole state={state} updateUser={updateUser} updateCompanyStatus={updateCompanyStatus} removeUser={removeUser} removeCompany={removeCompany} purchaseSubscription={purchaseSubscription} />}
             {activeTab === 'legal' && <LegalCompliance />}
           </div>
-          
-          {/* Global Content Footer */}
-          <footer className="mt-16 py-8 border-t border-gray-100 text-center opacity-40">
-            <p className="text-[9px] font-black text-gray-400 uppercase tracking-[0.5em]">Developed by Pragati Enterprises</p>
-            <p className="text-[7px] font-bold text-gray-300 uppercase tracking-widest mt-2">Enterprise Infrastructure Management System v4.0</p>
-          </footer>
         </main>
       </div>
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t flex justify-around items-center px-4 py-3 z-[100] shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
-        {panelConfig.nav.map(i => (
-          <button key={i.id} onClick={() => setActiveTab(i.id)} className={`flex flex-col items-center justify-center space-y-1 transition-all ${activeTab === i.id ? 'text-blue-700' : 'text-gray-300'}`}>
-            <i.icon className="w-5 h-5" />
-            <span className="text-[8px] font-black uppercase tracking-widest">{i.label.split(' ')[0]}</span>
-          </button>
-        ))}
-      </nav>
     </div>
   );
 };
