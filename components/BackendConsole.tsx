@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { AppState, User, UserStatus, UserRole, Company, ServerEvent, Site } from '../types';
+import { AppState, User, UserStatus, UserRole, Company, ServerEvent, Site, PaymentStatus } from '../types';
 import { saveState } from '../store';
 
 interface Props {
@@ -14,10 +14,18 @@ interface Props {
   removeSite: (id: string) => Promise<void>;
 }
 
-const BackendConsole: React.FC<Props> = ({ state, updateUser, updateCompanyStatus, removeUser, removeCompany, purchaseSubscription, addSite, removeSite }) => {
-  const [activeView, setActiveView] = useState<'status' | 'enterprises' | 'users' | 'sites' | 'logs' | 'config'>('status');
+const BackendConsole: React.FC<Props> = ({ state, updateCompanyStatus, removeUser, removeCompany, purchaseSubscription, addSite, removeSite }) => {
+  const [activeView, setActiveView] = useState<'status' | 'enterprises' | 'users' | 'sites' | 'logs' | 'config' | 'integrations'>('status');
   const [search, setSearch] = useState('');
   const logEndRef = useRef<HTMLDivElement>(null);
+
+  // Razorpay Plugin Simulation State
+  const [razorpayConfig, setRazorpayConfig] = useState({
+    keyId: 'rzp_test_58Xm92...',
+    keySecret: '••••••••••••••••',
+    merchantId: 'MID_9928341',
+    isEnabled: true
+  });
 
   // Site form state
   const [newSite, setNewSite] = useState({ name: '', address: '', lat: 0, lng: 0, companyId: '' });
@@ -80,6 +88,7 @@ const BackendConsole: React.FC<Props> = ({ state, updateUser, updateCompanyStatu
             { id: 'enterprises', label: 'Tenant Registry', icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4' },
             { id: 'users', label: 'Global Identities', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z' },
             { id: 'sites', label: 'Site Registry', icon: 'M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z' },
+            { id: 'integrations', label: 'Integrations', icon: 'M13 10V3L4 14h7v7l9-11h-7z' },
             { id: 'logs', label: 'Server Logs', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
             { id: 'config', label: 'System Config', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z' }
           ].map(item => (
@@ -138,7 +147,6 @@ const BackendConsole: React.FC<Props> = ({ state, updateUser, updateCompanyStatu
               ))}
             </div>
 
-            {/* Simulated Server Load Visualizer */}
             <div className="bg-slate-900/50 rounded-[2.5rem] border border-slate-800 p-10">
                <div className="flex justify-between items-center mb-10">
                   <h4 className="text-white font-black uppercase text-xs tracking-widest">Dynamic Cluster Load</h4>
@@ -210,139 +218,113 @@ const BackendConsole: React.FC<Props> = ({ state, updateUser, updateCompanyStatu
                       </td>
                     </tr>
                   ))}
-                  {filteredCompanies.length === 0 && (
-                    <tr><td colSpan={4} className="px-10 py-20 text-center text-slate-600 font-black uppercase text-xs tracking-widest">No matching tenants detected in current cluster</td></tr>
-                  )}
                 </tbody>
               </table>
             </div>
           </div>
         )}
 
-        {activeView === 'users' && (
-           <div className="bg-slate-900/50 rounded-[2.5rem] border border-slate-800 overflow-hidden animate-in slide-in-from-bottom-4 duration-500">
-             <div className="overflow-x-auto">
-               <table className="w-full text-left border-collapse">
-                 <thead className="bg-slate-950 text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                   <tr>
-                     <th className="px-10 py-6">Personnel Identity</th>
-                     <th className="px-10 py-6">Enterprise Hub</th>
-                     <th className="px-10 py-6">System Role</th>
-                     <th className="px-10 py-6 text-right">Master Actions</th>
-                   </tr>
-                 </thead>
-                 <tbody className="divide-y divide-slate-800/50">
-                    {filteredUsers.map(u => {
-                      const comp = state.companies.find(c => c.id === u.companyId);
-                      return (
-                        <tr key={u.id} className="hover:bg-slate-800/30 transition-all group">
-                          <td className="px-10 py-8">
-                            <p className="text-white text-sm font-black uppercase tracking-tight">{u.name}</p>
-                            <p className="text-[9px] text-slate-500 font-bold uppercase mt-1">ID: {u.id}</p>
-                          </td>
-                          <td className="px-10 py-8">
-                             <p className="text-blue-400 text-[11px] font-black uppercase tracking-widest">{comp?.name || 'SYSTEM ROOT'}</p>
-                          </td>
-                          <td className="px-10 py-8">
-                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{u.role}</span>
-                          </td>
-                          <td className="px-10 py-8 text-right">
-                             <button 
-                               onClick={() => { if(confirm(`CRITICAL: Remove user ${u.name}?`)) removeUser(u.id); }}
-                               className="text-red-500/50 hover:text-red-500 text-[9px] font-black uppercase tracking-widest transition-colors"
-                             >
-                               Purge
-                             </button>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                 </tbody>
-               </table>
-             </div>
-           </div>
-        )}
-
-        {activeView === 'sites' && (
+        {activeView === 'integrations' && (
           <div className="space-y-10 animate-in fade-in duration-500">
-             {/* Add Site Form */}
-             <div className="bg-slate-900/50 p-10 rounded-[2.5rem] border border-slate-800">
-                <h4 className="text-white font-black uppercase text-sm tracking-tight mb-8">Establish Project Node (Site)</h4>
-                <form onSubmit={handleAddSite} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                   <div className="lg:col-span-1">
-                      <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Target Enterprise</label>
-                      <select required className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl px-4 py-3.5 text-xs font-bold outline-none focus:border-blue-500" value={newSite.companyId} onChange={e => setNewSite({...newSite, companyId: e.target.value})}>
-                        <option value="">Choose Tenant...</option>
-                        {state.companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                      </select>
-                   </div>
-                   <div className="lg:col-span-1">
-                      <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Site Name</label>
-                      <input type="text" required placeholder="e.g. South Sector 4" className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl px-4 py-3.5 text-xs font-bold outline-none focus:border-blue-500" value={newSite.name} onChange={e => setNewSite({...newSite, name: e.target.value})} />
-                   </div>
-                   <div className="lg:col-span-1">
-                      <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Physical Address</label>
-                      <input type="text" placeholder="Project Coordinates Area" className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl px-4 py-3.5 text-xs font-bold outline-none focus:border-blue-500" value={newSite.address} onChange={e => setNewSite({...newSite, address: e.target.value})} />
-                   </div>
-                   <div>
-                      <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Latitude</label>
-                      <input type="number" step="any" required placeholder="0.00000" className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl px-4 py-3.5 text-xs font-bold outline-none focus:border-blue-500" value={newSite.lat || ''} onChange={e => setNewSite({...newSite, lat: parseFloat(e.target.value) || 0})} />
-                   </div>
-                   <div>
-                      <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Longitude</label>
-                      <input type="number" step="any" required placeholder="0.00000" className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl px-4 py-3.5 text-xs font-bold outline-none focus:border-blue-500" value={newSite.lng || ''} onChange={e => setNewSite({...newSite, lng: parseFloat(e.target.value) || 0})} />
-                   </div>
-                   <div className="flex items-end">
-                      <button type="submit" className="w-full bg-blue-600 text-white py-3.5 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-xl hover:bg-blue-500 transition-all">Enroll Site</button>
-                   </div>
-                </form>
-             </div>
-
-             {/* Site List */}
-             <div className="bg-slate-900/50 rounded-[2.5rem] border border-slate-800 overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead className="bg-slate-950 text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                      <tr>
-                        <th className="px-10 py-6">Site Descriptor</th>
-                        <th className="px-10 py-6">Enterprise Hub</th>
-                        <th className="px-10 py-6 text-center">GPS Precision</th>
-                        <th className="px-10 py-6 text-right">Master Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800/50">
-                      {filteredSites.map(s => {
-                        const comp = state.companies.find(c => c.id === s.companyId);
-                        return (
-                          <tr key={s.id} className="hover:bg-slate-800/30 transition-all group">
-                            <td className="px-10 py-8">
-                              <p className="text-white text-sm font-black uppercase tracking-tight">{s.name}</p>
-                              <p className="text-[9px] text-slate-500 font-bold uppercase mt-1">{s.address || 'No Address Data'}</p>
-                            </td>
-                            <td className="px-10 py-8">
-                               <p className="text-blue-400 text-[11px] font-black uppercase tracking-widest">{comp?.name || 'ORPHAN NODE'}</p>
-                            </td>
-                            <td className="px-10 py-8 text-center font-mono text-[10px] text-slate-400">
-                               {s.lat.toFixed(5)}, {s.lng.toFixed(5)}
-                            </td>
-                            <td className="px-10 py-8 text-right">
-                               <button 
-                                 onClick={() => { if(confirm(`Purge site ${s.name}?`)) removeSite(s.id); }}
-                                 className="text-red-500/50 hover:text-red-500 text-[9px] font-black uppercase tracking-widest transition-colors"
-                               >
-                                 Purge
-                               </button>
-                            </td>
-                          </tr>
-                        )
-                      })}
-                      {filteredSites.length === 0 && (
-                        <tr><td colSpan={4} className="px-10 py-20 text-center text-slate-600 font-black uppercase text-xs tracking-widest">No project nodes detected in current cluster</td></tr>
-                      )}
-                    </tbody>
-                  </table>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/* Razorpay Config Card */}
+              <div className="lg:col-span-2 bg-slate-900/50 p-10 rounded-[2.5rem] border border-slate-800">
+                <div className="flex justify-between items-start mb-10">
+                  <div className="flex items-center space-x-4">
+                    <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-black shadow-xl shadow-blue-500/10">RP</div>
+                    <div>
+                      <h4 className="text-white font-black uppercase text-sm tracking-tight">Razorpay Plugin</h4>
+                      <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mt-1">Payment Gateway Engine</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-3 bg-slate-950 p-2 rounded-xl">
+                    <span className="text-[8px] font-black text-slate-500 uppercase">Status:</span>
+                    <span className={`w-2 h-2 rounded-full ${razorpayConfig.isEnabled ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                    <button 
+                      onClick={() => setRazorpayConfig(prev => ({ ...prev, isEnabled: !prev.isEnabled }))}
+                      className="text-[8px] font-black text-blue-400 uppercase tracking-widest hover:text-white"
+                    >
+                      {razorpayConfig.isEnabled ? 'Disable' : 'Enable'}
+                    </button>
+                  </div>
                 </div>
-             </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 ml-1">Key ID</label>
+                    <input type="text" className="w-full bg-slate-950 border border-slate-800 text-slate-300 rounded-xl px-4 py-3 text-xs font-mono" value={razorpayConfig.keyId} onChange={e => setRazorpayConfig({...razorpayConfig, keyId: e.target.value})} />
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 ml-1">Key Secret</label>
+                    <input type="text" className="w-full bg-slate-950 border border-slate-800 text-slate-300 rounded-xl px-4 py-3 text-xs font-mono" value={razorpayConfig.keySecret} onChange={e => setRazorpayConfig({...razorpayConfig, keySecret: e.target.value})} />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 ml-1">Merchant ID</label>
+                    <input type="text" className="w-full bg-slate-950 border border-slate-800 text-slate-300 rounded-xl px-4 py-3 text-xs font-mono" value={razorpayConfig.merchantId} onChange={e => setRazorpayConfig({...razorpayConfig, merchantId: e.target.value})} />
+                  </div>
+                </div>
+
+                <div className="mt-10 flex gap-4">
+                  <button className="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl hover:bg-blue-500 transition-all">Save Plugin State</button>
+                  <button onClick={() => alert("RAZORPAY: Test ping successful. Connection verified.")} className="px-8 bg-slate-800 text-slate-400 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-slate-700 transition-all">Test Sync</button>
+                </div>
+              </div>
+
+              {/* Revenue Stats */}
+              <div className="bg-slate-900/50 p-10 rounded-[2.5rem] border border-slate-800 flex flex-col justify-between">
+                <div>
+                  <h4 className="text-white font-black uppercase text-xs tracking-widest mb-8">Processing Summary</h4>
+                  <div className="space-y-6">
+                    <div>
+                      <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-1">Total TTV (Cross-Tenant)</p>
+                      <p className="text-3xl font-black text-white tracking-tighter">₹8,44,200</p>
+                    </div>
+                    <div>
+                      <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-1">Active Subscriptions</p>
+                      <p className="text-3xl font-black text-blue-500 tracking-tighter">{state.companies.filter(c => c.subscriptionPlanId !== 'p-free').length}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="pt-8 border-t border-slate-800">
+                   <p className="text-[10px] font-black text-slate-500 uppercase leading-relaxed italic">
+                     "The Razorpay plugin handles 256-bit encrypted transactions for all enterprise upgrades in the cluster."
+                   </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Global Payment Ledger */}
+            <div className="bg-slate-900/50 rounded-[2.5rem] border border-slate-800 overflow-hidden">
+               <div className="p-8 border-b border-slate-800 flex justify-between items-center bg-slate-950/30">
+                  <h4 className="text-white font-black uppercase text-xs tracking-widest">Global Transaction Ledger</h4>
+                  <span className="text-[9px] font-black text-slate-500 uppercase bg-slate-900 px-3 py-1 rounded-full">Audit Enabled</span>
+               </div>
+               <div className="overflow-x-auto">
+                 <table className="w-full text-left">
+                    <thead className="bg-slate-950 text-[10px] font-black text-slate-600 uppercase tracking-widest">
+                       <tr>
+                          <th className="px-8 py-5">TXN Reference</th>
+                          <th className="px-8 py-5">Enterprise</th>
+                          <th className="px-8 py-5 text-center">Plan Tier</th>
+                          <th className="px-8 py-5 text-right">Amount</th>
+                       </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/30 font-mono text-[11px]">
+                       {state.companies.filter(c => c.subscriptionPlanId !== 'p-free').map((c, i) => {
+                          const plan = state.subscriptionPlans.find(p => p.id === c.subscriptionPlanId);
+                          return (
+                            <tr key={c.id} className="hover:bg-slate-800/20 text-slate-400">
+                               <td className="px-8 py-6">RP_TXN_{10000 + i}</td>
+                               <td className="px-8 py-6 uppercase font-black text-slate-300">{c.name}</td>
+                               <td className="px-8 py-6 text-center uppercase">{plan?.name}</td>
+                               <td className="px-8 py-6 text-right text-blue-400 font-black">₹{plan?.price.toLocaleString()}</td>
+                            </tr>
+                          )
+                       })}
+                    </tbody>
+                 </table>
+               </div>
+            </div>
           </div>
         )}
 
