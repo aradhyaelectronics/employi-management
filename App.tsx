@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { UserRole, UserStatus, User, AppState } from './types';
 import { useStore } from './store';
@@ -24,6 +23,7 @@ declare global {
       vibrate: (duration: number) => void;
       getAppVersion: () => string;
       exitApp: () => void;
+      shareApp: (url: string) => void;
     };
   }
 }

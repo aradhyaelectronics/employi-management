@@ -2,7 +2,6 @@
 import React, { useState, useMemo } from 'react';
 import { User, AppState, UserRole, Task } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { GoogleGenAI } from "@google/genai";
 import { ICONS, Logo } from '../constants';
 
 interface Props {
@@ -17,10 +16,8 @@ const Dashboard: React.FC<Props> = ({ user, state, getAiSystemContext, updateTas
   const isSuper = user.role === UserRole.SUPER_ADMIN;
   const isAdmin = user.role === UserRole.ADMIN;
   const isSupervisor = user.role === UserRole.SUPERVISOR;
-  const isEmployee = user.role === UserRole.EMPLOYEE;
   
-  const [aiReport, setAiReport] = useState<{ text: string, sources?: any[] } | null>(null);
-  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   // APK URL from global state
   const APK_DOWNLOAD_URL = state.apkUrl;
@@ -28,7 +25,7 @@ const Dashboard: React.FC<Props> = ({ user, state, getAiSystemContext, updateTas
   const handleShareApp = () => {
     const shareData = {
       title: 'Pragati Workforce Platform',
-      text: 'Download our official enterprise field application:',
+      text: 'Download our official enterprise field application for reporting and attendance:',
       url: APK_DOWNLOAD_URL
     };
 
@@ -36,13 +33,18 @@ const Dashboard: React.FC<Props> = ({ user, state, getAiSystemContext, updateTas
       (window.AndroidInterface as any).shareApp(APK_DOWNLOAD_URL);
     } else if (navigator.share) {
       navigator.share(shareData).catch(() => {
-        navigator.clipboard.writeText(APK_DOWNLOAD_URL);
-        alert("App Distribution Link Copied to Clipboard.");
+        copyToClipboard();
       });
     } else {
-      navigator.clipboard.writeText(APK_DOWNLOAD_URL);
-      alert("App Distribution Link Copied to Clipboard.");
+      copyToClipboard();
     }
+  };
+
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(APK_DOWNLOAD_URL);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+    if (window.AndroidInterface) window.AndroidInterface.showToast("App Link Copied!");
   };
 
   const stats = useMemo(() => {
@@ -82,23 +84,37 @@ const Dashboard: React.FC<Props> = ({ user, state, getAiSystemContext, updateTas
       </div>
 
       {(isAdmin || isSupervisor) && (
-        <div className="bg-slate-900 p-8 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden border border-slate-800">
-           <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/10 blur-[60px] rounded-full -mr-16 -mt-16"></div>
+        <div className="bg-slate-900 p-8 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden border border-slate-800 group">
+           <div className="absolute top-0 right-0 w-48 h-48 bg-blue-600/10 blur-[60px] rounded-full -mr-24 -mt-24 group-hover:bg-blue-600/20 transition-all"></div>
            <div className="relative z-10">
               <div className="flex items-center space-x-3 mb-4">
-                 <ICONS.Android className="w-8 h-8 text-green-500" />
-                 <h3 className="text-sm font-black uppercase tracking-widest text-white">Mobile App Deployment</h3>
+                 <div className="p-3 bg-green-500/10 rounded-xl">
+                    <ICONS.Android className="w-6 h-6 text-green-500" />
+                 </div>
+                 <div>
+                    <h3 className="text-sm font-black uppercase tracking-widest text-white">Pragati Android APK</h3>
+                    <p className="text-[8px] font-bold text-slate-500 uppercase tracking-[0.2em]">Build v4.8.2-Stable</p>
+                 </div>
               </div>
               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-relaxed mb-6">
-                 Ensure all employees log their progress accurately. Share the official Android APK link for easy onboarding.
+                 Authorized Field Application. Share this link with your employees to allow them to report attendance and work telemetry.
               </p>
-              <div className="flex gap-3">
-                 <button onClick={handleShareApp} className="flex-1 bg-blue-600 hover:bg-blue-500 py-4 rounded-xl font-black text-[9px] uppercase tracking-widest shadow-xl flex items-center justify-center space-x-2 transition-all active:scale-95">
+              <div className="flex flex-col sm:flex-row gap-3">
+                 <button 
+                  onClick={handleShareApp} 
+                  className="flex-1 bg-blue-600 hover:bg-blue-500 py-4 rounded-xl font-black text-[9px] uppercase tracking-widest shadow-xl flex items-center justify-center space-x-2 transition-all active:scale-95"
+                 >
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
-                    <span>Share App Link</span>
+                    <span>{copied ? 'Link Copied!' : 'Share App Link'}</span>
                  </button>
-                 <a href={APK_DOWNLOAD_URL} target="_blank" className="px-6 bg-slate-800 hover:bg-slate-700 py-4 rounded-xl font-black text-[9px] uppercase tracking-widest flex items-center justify-center transition-all">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                 <a 
+                  href={APK_DOWNLOAD_URL} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="px-6 bg-slate-800 hover:bg-slate-700 py-4 rounded-xl font-black text-[9px] uppercase tracking-widest flex items-center justify-center transition-all border border-slate-700 hover:border-slate-500"
+                 >
+                    <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                    Download
                  </a>
               </div>
            </div>
