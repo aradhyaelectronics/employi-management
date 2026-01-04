@@ -7,24 +7,21 @@ import {
 } from './types';
 
 const STORAGE_KEY = 'employeemanagement_data_v3';
+const CURRENT_VERSION = '4.2.2-stable-sync';
 const STANDARD_SHIFT_HOURS = 8;
 
-// Robust normalization for mobile numbers
 const normalizeMobile = (num: string | undefined): string => {
   if (!num) return '';
-  // Remove all non-numeric characters
   const cleaned = num.replace(/\D/g, '');
-  // Strip Indian 91 prefix if present for consistent local matching
   if (cleaned.length === 12 && cleaned.startsWith('91')) return cleaned.substring(2);
   return cleaned;
 };
 
-// Default Master Admin used for system recovery and first-time setup
 const MASTER_ADMIN: User = {
   id: 'u-root-001',
   name: 'Pragati Master',
   email: 'admin@pragati.com',
-  mobile: '0000000000',
+  mobile: '7709384869',
   role: UserRole.SUPER_ADMIN,
   status: UserStatus.ACTIVE,
   companyId: 'SYSTEM',
@@ -32,46 +29,63 @@ const MASTER_ADMIN: User = {
   pin: '1234'
 };
 
+// Default empty state for the current version
+const DEFAULT_STATE: AppState = {
+  users: [MASTER_ADMIN], 
+  companies: [], 
+  sites: [], 
+  projects: [], 
+  tasks: [], 
+  leaves: [],
+  attendance: [], 
+  workLogs: [], 
+  requests: [], 
+  subscriptionPlans: [
+    { id: 'p-free', name: 'Standard (Free)', price: 0, durationDays: 365, userLimit: 5, features: ['Basic Attendance', 'Work Logs', 'Manual Payroll'] },
+    { id: 'p-pro', name: 'Enterprise Pro', price: 4999, durationDays: 30, userLimit: 50, features: ['Advanced Payroll', 'Geofencing', 'Task Management', 'Leave Portal', 'AI Audits'] }
+  ],
+  salarySlips: [], 
+  version: CURRENT_VERSION
+};
+
 const getInitialState = (): AppState => {
   try {
     const stored = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null;
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      
-      // Merge logic: Ensure MASTER_ADMIN is always in the users list
-      const users = parsed.users || [];
-      const hasMaster = users.some((u: User) => u.email === MASTER_ADMIN.email || u.id === MASTER_ADMIN.id);
-      
-      return {
-        ...parsed,
-        users: hasMaster ? users : [MASTER_ADMIN, ...users],
-        projects: parsed.projects || [],
-        tasks: parsed.tasks || [],
-        leaves: parsed.leaves || [],
-        version: '4.2.1-pragati-master-ops'
-      };
-    }
-  } catch (e) {
-    console.error("Store recovery failed, initializing fresh state.");
-  }
+    if (!stored) return DEFAULT_STATE;
 
-  return {
-    users: [MASTER_ADMIN], 
-    companies: [], 
-    sites: [], 
-    projects: [], 
-    tasks: [], 
-    leaves: [],
-    attendance: [], 
-    workLogs: [], 
-    requests: [], 
-    subscriptionPlans: [
-      { id: 'p-free', name: 'Standard (Free)', price: 0, durationDays: 365, userLimit: 5, features: ['Basic Attendance', 'Work Logs', 'Manual Payroll'] },
-      { id: 'p-pro', name: 'Enterprise Pro', price: 4999, durationDays: 30, userLimit: 50, features: ['Advanced Payroll', 'Geofencing', 'Task Management', 'Leave Portal', 'AI Audits'] }
-    ],
-    salarySlips: [], 
-    version: '4.2.1-pragati-master-ops'
-  };
+    const parsed = JSON.parse(stored);
+    
+    // SMART MERGE LOGIC: 
+    // This ensures that when you add new features (keys) in code, 
+    // they are added to the user's existing data without deleting old data.
+    const migratedState = { ...DEFAULT_STATE, ...parsed };
+
+    // Ensure critical arrays are present (Safety against older versions)
+    migratedState.users = Array.isArray(parsed.users) ? parsed.users : [MASTER_ADMIN];
+    migratedState.projects = Array.isArray(parsed.projects) ? parsed.projects : [];
+    migratedState.tasks = Array.isArray(parsed.tasks) ? parsed.tasks : [];
+    migratedState.leaves = Array.isArray(parsed.leaves) ? parsed.leaves : [];
+    migratedState.salarySlips = Array.isArray(parsed.salarySlips) ? parsed.salarySlips : [];
+    
+    // Always ensure Master Admin exists for recovery
+    const hasMaster = migratedState.users.some((u: User) => u.id === MASTER_ADMIN.id || u.email === MASTER_ADMIN.email);
+    if (!hasMaster) {
+      migratedState.users.unshift(MASTER_ADMIN);
+    } else {
+      // Update Master Admin details (like phone number) even in existing data
+      migratedState.users = migratedState.users.map((u: User) => 
+        u.id === MASTER_ADMIN.id ? { ...u, mobile: MASTER_ADMIN.mobile } : u
+      );
+    }
+
+    // Update version to latest
+    migratedState.version = CURRENT_VERSION;
+    
+    return migratedState;
+  } catch (e) {
+    console.error("Critical: Local storage corrupted. Salvaging with default state.");
+    return DEFAULT_STATE;
+  }
 };
 
 const calculateHours = (start: string, end: string): number => {
@@ -81,14 +95,17 @@ const calculateHours = (start: string, end: string): number => {
     const e = end.split(':').map(Number);
     const startMins = s[0] * 60 + s[1];
     const endMins = e[0] * 60 + e[1];
-    const diff = endMins - startMins;
-    return Math.max(0, diff / 60);
+    return Math.max(0, (endMins - startMins) / 60);
   } catch {
     return 0;
   }
 };
 
-export const saveState = (state: AppState) => localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+export const saveState = (state: AppState) => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }
+};
 
 export const useStore = () => {
   const [state, setState] = React.useState<AppState>(getInitialState());
@@ -102,8 +119,10 @@ export const useStore = () => {
   };
 
   const resetSystem = () => {
-    localStorage.removeItem(STORAGE_KEY);
-    window.location.reload();
+    if (confirm("This will PERMANENTLY delete all data. Continue?")) {
+      localStorage.removeItem(STORAGE_KEY);
+      window.location.reload();
+    }
   };
 
   return {
@@ -114,19 +133,14 @@ export const useStore = () => {
       const cleanMobileId = normalizeMobile(cleanId);
       const cleanSecret = secret.trim();
 
-      if (!cleanId || !cleanSecret) return null;
-
       return state.users.find(u => {
         const storedEmail = (u.email || '').trim().toLowerCase();
         const storedMobile = normalizeMobile(u.mobile);
         const storedPassword = (u.password || '').trim();
         const storedPin = (u.pin || '').trim();
         
-        const isEmailMatch = storedEmail === cleanId;
-        const isMobileMatch = cleanMobileId !== '' && storedMobile === cleanMobileId;
-        const isSecretMatch = storedPassword === cleanSecret || storedPin === cleanSecret;
-
-        return (isEmailMatch || isMobileMatch) && isSecretMatch;
+        return (storedEmail === cleanId || (cleanMobileId !== '' && storedMobile === cleanMobileId)) 
+               && (storedPassword === cleanSecret || storedPin === cleanSecret);
       }) || null;
     },
 
@@ -135,13 +149,9 @@ export const useStore = () => {
       const normMobile = normalizeMobile(cleanMobile);
       const cleanEmail = (u.email || '').trim().toLowerCase();
       
-      const exists = state.users.find(ex => {
-        if (cleanEmail && ex.email.toLowerCase() === cleanEmail) return true;
-        if (normMobile && normalizeMobile(ex.mobile) === normMobile) return true;
-        return false;
-      });
-
-      if (exists) throw new Error("ID Conflict: Email or Mobile already registered.");
+      if (state.users.some(ex => (cleanEmail && ex.email.toLowerCase() === cleanEmail) || (normMobile && normalizeMobile(ex.mobile) === normMobile))) {
+        throw new Error("ID Conflict: Email or Mobile already registered.");
+      }
 
       const newUser = { 
         status: UserStatus.PENDING, 
@@ -186,8 +196,7 @@ export const useStore = () => {
       
       updateState(p => {
         if (type === 'IN') {
-          const exists = p.attendance.find(a => a.userId === uid && a.date === date);
-          if (exists) return p;
+          if (p.attendance.some(a => a.userId === uid && a.date === date)) return p;
           return { ...p, attendance: [...p.attendance, { id: `a-${Date.now()}`, userId: uid, companyId: cid, siteId, date, checkIn: time, ...coords }] };
         } else {
           return { ...p, attendance: p.attendance.map(a => (a.userId === uid && a.date === date && !a.checkOut) ? { ...a, checkOut: time, overtimeHours: ot } : a) };
@@ -206,7 +215,7 @@ export const useStore = () => {
     updateRequestStatus: async (id: string, status: RequestStatus) => updateState(p => ({ ...p, requests: p.requests.map(r => r.id === id ? { ...r, status } : r) })),
     addSite: async (s: any) => updateState(p => ({ ...p, sites: [...p.sites, { ...s, id: `s-${Date.now()}` }] })),
     removeSite: async (id: string) => updateState(p => ({ ...p, sites: p.sites.filter(s => s.id !== id) })),
-    removeCompany: async (id: string) => updateState(p => ({ ...p, companies: p.companies.filter(c => c.id !== id) })),
+    removeCompany: async (id: string) => updateState(p => ({ ...p, companies: p.companies.filter(c => c.id !== id) }));
     purchaseSubscription: async (cid: string, pid: string, months: number = 1) => {
       updateState(p => ({ 
         ...p, 

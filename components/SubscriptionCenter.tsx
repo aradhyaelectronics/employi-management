@@ -26,12 +26,12 @@ const SubscriptionCenter: React.FC<Props> = ({ user, state, updatePlan, purchase
   // States for Personnel Search & Filtering
   const [userSearch, setUserSearch] = useState('');
 
-  // Filter only Admin users for the activation dropdown (as they own the company subscription)
+  // Filter only Admin users for the activation dropdown
   const enterpriseAdmins = useMemo(() => {
     return state.users.filter(u => u.role === UserRole.ADMIN).sort((a, b) => a.name.localeCompare(b.name));
   }, [state.users]);
 
-  // Global Personnel List for Master View - Shows EVERYONE in the system
+  // Global Personnel List for Master View - Shows EVERYONE in the system across all companies
   const globalPersonnel = useMemo(() => {
     return state.users
       .filter(u => 
@@ -171,13 +171,13 @@ const SubscriptionCenter: React.FC<Props> = ({ user, state, updatePlan, purchase
           <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
             <div className="p-10 border-b border-gray-50 bg-gray-50/50 flex flex-col md:flex-row justify-between items-center gap-6">
               <div>
-                <h3 className="text-2xl font-black text-blue-900 uppercase tracking-tighter">Global Personnel Registry</h3>
-                <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">Master Account Management • {state.users.length} Total Units</p>
+                <h3 className="text-2xl font-black text-blue-900 uppercase tracking-tighter">Global Personnel Control</h3>
+                <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">Master Account Deletion • {state.users.length} Total Registered</p>
               </div>
               <div className="relative w-full md:w-80 group">
                 <input 
                   type="text" 
-                  placeholder="Filter by Name, Email or Mobile..." 
+                  placeholder="Filter Name, Email or Mobile..." 
                   className="w-full pl-12 pr-6 py-4 bg-white border border-gray-200 rounded-2xl text-xs font-bold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all shadow-sm"
                   value={userSearch}
                   onChange={e => setUserSearch(e.target.value)}
@@ -188,21 +188,21 @@ const SubscriptionCenter: React.FC<Props> = ({ user, state, updatePlan, purchase
               </div>
             </div>
             
-            <div className="overflow-x-auto max-h-[600px] overflow-y-auto custom-scrollbar">
+            <div className="overflow-x-auto max-h-[500px] overflow-y-auto custom-scrollbar">
               <table className="w-full text-left border-collapse">
                 <thead className="bg-white sticky top-0 z-20 shadow-sm">
                   <tr>
-                    <th className="px-10 py-5 text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] border-b">Personnel Profile</th>
+                    <th className="px-10 py-5 text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] border-b">Personnel Identity</th>
                     <th className="px-10 py-5 text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] border-b">Enterprise Node</th>
-                    <th className="px-10 py-5 text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] border-b">Secret Keys</th>
-                    <th className="px-10 py-5 text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] border-b text-right">System Actions</th>
+                    <th className="px-10 py-5 text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] border-b">Access Keys</th>
+                    <th className="px-10 py-5 text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] border-b text-right">Emergency Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {globalPersonnel.map((u) => {
                     const userComp = state.companies.find(c => c.id === u.companyId);
                     return (
-                      <tr key={u.id} className="hover:bg-blue-50/30 transition-all group">
+                      <tr key={u.id} className="hover:bg-red-50/30 transition-all group">
                         <td className="px-10 py-6">
                            <div className="flex items-center space-x-3">
                               <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-[10px] ${u.role === UserRole.SUPER_ADMIN ? 'bg-slate-900 text-white' : 'bg-gray-100 text-gray-400'}`}>
@@ -239,12 +239,12 @@ const SubscriptionCenter: React.FC<Props> = ({ user, state, updatePlan, purchase
                         <td className="px-10 py-6 text-right">
                            <button 
                              onClick={() => handlePurgeAccount(u)}
-                             className="opacity-0 group-hover:opacity-100 bg-red-50 text-red-600 hover:bg-red-600 hover:text-white px-5 py-2.5 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all border border-red-100 flex items-center space-x-2 ml-auto"
+                             className="opacity-0 group-hover:opacity-100 bg-red-100 text-red-700 hover:bg-red-600 hover:text-white px-5 py-2.5 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all border border-red-200 flex items-center space-x-2 ml-auto shadow-sm"
                            >
                               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                               </svg>
-                              <span>Purge</span>
+                              <span>Purge User</span>
                            </button>
                         </td>
                       </tr>
@@ -253,8 +253,8 @@ const SubscriptionCenter: React.FC<Props> = ({ user, state, updatePlan, purchase
                 </tbody>
               </table>
             </div>
-            <div className="p-6 bg-gray-50 text-center border-t border-gray-100">
-               <p className="text-[8px] font-black text-gray-400 uppercase tracking-[0.4em]">Audit Trail Active • All Purges are Logged</p>
+            <div className="p-6 bg-red-50 text-center border-t border-red-100">
+               <p className="text-[8px] font-black text-red-400 uppercase tracking-[0.4em]">Audit Trail Active • Permanent Account Deletion Capability</p>
             </div>
           </div>
 
