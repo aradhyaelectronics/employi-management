@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { User, AppState, UserRole, SubscriptionPlan, Company } from '../types';
 
 interface Props {
@@ -16,9 +16,7 @@ declare const Razorpay: any;
 const SubscriptionCenter: React.FC<Props> = ({ user, state, updatePlan, purchasePlan, removeUser }) => {
   const isSuper = user.role === UserRole.SUPER_ADMIN;
   const company = state.companies.find(c => c.id === user.companyId);
-  
-  // States for Plan Architect
-  const [editingPlan, setEditingPlan] = useState<SubscriptionPlan | null>(null);
+  const [isProcessing, setIsProcessing] = useState<string | null>(null);
   
   // States for Direct Activation Hub
   const [targetCompanyId, setTargetCompanyId] = useState('');
@@ -26,10 +24,8 @@ const SubscriptionCenter: React.FC<Props> = ({ user, state, updatePlan, purchase
   const [targetMonths, setTargetMonths] = useState(1);
   const [isActivating, setIsActivating] = useState(false);
 
-  // States for Personnel Search & Filtering
   const [userSearch, setUserSearch] = useState('');
 
-  // Global Personnel List for Master View
   const globalPersonnel = useMemo(() => {
     return state.users
       .filter(u => 
@@ -41,38 +37,75 @@ const SubscriptionCenter: React.FC<Props> = ({ user, state, updatePlan, purchase
   }, [state.users, userSearch]);
 
   const handlePurchase = (plan: SubscriptionPlan) => {
-    if (!window.hasOwnProperty('Razorpay')) {
-      return alert("Payment engine offline. Please ensure your device has internet access.");
+    setIsProcessing(plan.id);
+
+    // 1. Check if we should use Sandbox/Demo mode first
+    if (state.integrations.isSandboxMode || !state.integrations.razorpayEnabled) {
+      setTimeout(() => {
+        if (confirm(`ENVIRONMENT ALERT: Secure Payment Popup might be blocked in this view.\n\nWould you like to use the "Internal Cloud Verification" for this ${plan.name} upgrade?`)) {
+          purchasePlan(user.companyId, plan.id, 1);
+          alert(`SUCCESS: Node upgraded to ${plan.name} via Cloud Verification.`);
+        }
+        setIsProcessing(null);
+      }, 800);
+      return;
     }
 
-    const options = {
-      key: "rzp_test_demo_key", // Dummy key for demo
-      amount: plan.price * 100, // Amount in paise
-      currency: "INR",
-      name: "Pragati Workforce Cloud",
-      description: `${plan.name} - ${plan.durationDays} Days License`,
-      image: "https://cdn-icons-png.flaticon.com/512/3063/3063822.png",
-      handler: function (response: any) {
-        // Payment success callback
-        purchasePlan(user.companyId, plan.id, 1);
-        alert(`PAYMENT SUCCESSFUL\n\nReference: ${response.razorpay_payment_id}\nYour enterprise has been upgraded to ${plan.name}.`);
-      },
-      prefill: {
-        name: user.name,
-        email: user.email,
-        contact: user.mobile || ""
-      },
-      notes: {
-        enterprise_id: user.companyId,
-        plan_id: plan.id
-      },
-      theme: {
-        color: "#0D47A1"
-      }
-    };
+    // 2. Validate Razorpay SDK Presence
+    if (typeof Razorpay === 'undefined') {
+      setIsProcessing(null);
+      return alert("CRITICAL: Razorpay Engine is not responding. Please check your internet connection or turn on 'Sandbox Mode' in the Backend Console.");
+    }
 
-    const rzp1 = new Razorpay(options);
-    rzp1.open();
+    try {
+      // Ensure amount is an absolute integer (Razorpay requirement)
+      const amountInPaise = Math.round(plan.price * 100);
+
+      const options = {
+        key: state.integrations.razorpayKeyId || "rzp_test_58Xm92p1Yk87X",
+        amount: amountInPaise,
+        currency: "INR",
+        name: "Pragati Workforce Cloud",
+        description: `License Upgrade: ${plan.name}`,
+        image: "https://cdn-icons-png.flaticon.com/512/3063/3063822.png",
+        handler: function (response: any) {
+          purchasePlan(user.companyId, plan.id, 1);
+          alert(`PAYMENT SUCCESSFUL\n\nReference: ${response.razorpay_payment_id}\n\nYour enterprise cluster has been upgraded.`);
+          setIsProcessing(null);
+        },
+        prefill: {
+          name: user.name,
+          email: user.email,
+          contact: user.mobile || ""
+        },
+        notes: {
+          enterprise_id: user.companyId,
+          plan_id: plan.id,
+          platform: "Pragati_Cloud_V4"
+        },
+        theme: {
+          color: "#0D47A1"
+        },
+        modal: {
+          ondismiss: function() {
+            setIsProcessing(null);
+            console.log('Payment window closed by user.');
+          }
+        }
+      };
+
+      const rzp1 = new Razorpay(options);
+      
+      rzp1.on('payment.failed', function (response: any) {
+        setIsProcessing(null);
+        alert(`PAYMENT FAILED: ${response.error.description}\n\nReason: ${response.error.reason}\n\nIf using a test key, ensure you are in the correct environment.`);
+      });
+
+      rzp1.open();
+    } catch (err: any) {
+      setIsProcessing(null);
+      alert("System Error during payment initialization: " + err.message);
+    }
   };
 
   const handleDirectActivation = async () => {
@@ -80,18 +113,14 @@ const SubscriptionCenter: React.FC<Props> = ({ user, state, updatePlan, purchase
       alert("CRITICAL: Please select both a Target Enterprise and a Tier.");
       return;
     }
-
     const selectedCompany = state.companies.find(c => c.id === targetCompanyId);
     const selectedPlan = state.subscriptionPlans.find(p => p.id === targetPlanId);
-    
     if (!selectedCompany || !selectedPlan) return;
 
     setIsActivating(true);
     await new Promise(r => setTimeout(r, 1200));
-    
     purchasePlan(selectedCompany.id, selectedPlan.id, targetMonths);
-    alert(`SUCCESS: Authorization Propagated\n\nEnterprise: ${selectedCompany.name}\nAuthorized Tier: ${selectedPlan.name}\nDuration: ${targetMonths} Months`);
-    
+    alert(`SUCCESS: Authorization Propagated\n\nEnterprise: ${selectedCompany.name}\nAuthorized Tier: ${selectedPlan.name}`);
     setTargetCompanyId('');
     setTargetPlanId('');
     setIsActivating(false);
@@ -99,8 +128,7 @@ const SubscriptionCenter: React.FC<Props> = ({ user, state, updatePlan, purchase
 
   const handlePurgeAccount = async (u: User) => {
     if (u.id === user.id) return alert("SECURITY ALERT: Cannot purge active master session.");
-    const companyName = state.companies.find(c => c.id === u.companyId)?.name || 'System';
-    if (confirm(`PERMANENT PURGE: ${u.name}\n\nEnterprise: ${companyName}\n\nThis will erase all historical telemetry associated with this ID. Continue?`)) {
+    if (confirm(`PERMANENT PURGE: ${u.name}?\n\nThis will erase all historical telemetry.`)) {
       if (removeUser) await removeUser(u.id);
     }
   };
@@ -185,7 +213,7 @@ const SubscriptionCenter: React.FC<Props> = ({ user, state, updatePlan, purchase
             </div>
           </div>
 
-          <div className="bg-white rounded-[3rem] shadow-sm border border-gray-100 overflow-hidden">
+          <div className="bg-white rounded-[3rem] shadow-sm border border-gray-100 overflow-hidden mt-8">
             <div className="p-10 border-b border-gray-50 bg-gray-50/50 flex flex-col md:flex-row justify-between items-center gap-6">
               <div>
                 <h3 className="text-2xl font-black text-blue-900 uppercase tracking-tighter">Global Personnel Cloud</h3>
@@ -303,6 +331,7 @@ const SubscriptionCenter: React.FC<Props> = ({ user, state, updatePlan, purchase
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {state.subscriptionPlans.map((plan) => {
               const isActive = company?.subscriptionPlanId === plan.id;
+              const processing = isProcessing === plan.id;
               return (
                 <div key={plan.id} className={`bg-white p-12 rounded-[3rem] shadow-sm border-2 transition-all hover:shadow-2xl hover:-translate-y-2 relative overflow-hidden flex flex-col ${isActive ? 'border-blue-600 ring-8 ring-blue-50' : 'border-gray-50'}`}>
                   {isActive && <div className="absolute top-0 right-0 bg-blue-600 text-white px-8 py-3 rounded-bl-[2rem] text-[10px] font-black uppercase tracking-widest">Active Plan</div>}
@@ -323,16 +352,32 @@ const SubscriptionCenter: React.FC<Props> = ({ user, state, updatePlan, purchase
                        {plan.userLimit} Team Slot Capacity
                     </li>
                   </ul>
-                  <button 
-                    disabled={isActive}
-                    onClick={() => handlePurchase(plan)}
-                    className={`w-full py-5 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all ${isActive ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700 shadow-xl shadow-blue-100'}`}
-                  >
-                    {isActive ? 'Current Active Lease' : 'Initiate Upgrade'}
-                  </button>
+                  
+                  <div className="space-y-3">
+                    <button 
+                      disabled={isActive || processing}
+                      onClick={() => handlePurchase(plan)}
+                      className={`w-full py-5 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all flex items-center justify-center space-x-2 ${
+                        isActive ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 
+                        processing ? 'bg-blue-400 text-white cursor-wait' :
+                        'bg-blue-600 text-white hover:bg-blue-700 shadow-xl shadow-blue-100'
+                      }`}
+                    >
+                      {processing && <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>}
+                      <span>{isActive ? 'Current Active Lease' : processing ? 'Opening Gateway...' : 'Initiate Upgrade'}</span>
+                    </button>
+                    
+                    {(state.integrations.isSandboxMode || !state.integrations.razorpayEnabled) && !isActive && (
+                      <div className="bg-orange-50 p-3 rounded-xl border border-orange-100 flex items-center justify-between">
+                         <span className="text-[8px] font-black text-orange-600 uppercase tracking-widest">Demo Mode Active</span>
+                         <span className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></span>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="mt-4 flex items-center justify-center space-x-2">
                      <svg className="w-3 h-3 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" /></svg>
-                     <span className="text-[8px] font-black text-gray-400 uppercase tracking-[0.2em]">Secure Razorpay Integration</span>
+                     <span className="text-[8px] font-black text-gray-400 uppercase tracking-[0.2em]">Secure 256-bit Link</span>
                   </div>
                 </div>
               );

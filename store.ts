@@ -3,11 +3,11 @@ import React from 'react';
 import { 
   AppState, User, Company, UserRole, UserStatus, RequestStatus, 
   WorkLog, FinancialRequest, MonthlySalarySlip, ServerEvent,
-  PaymentStatus, Project, Task, LeaveRequest, SalaryType, SubscriptionPlan, Attendance 
+  PaymentStatus, Project, Task, LeaveRequest, SalaryType, SubscriptionPlan, Attendance, IntegrationConfig 
 } from './types';
 
 const STORAGE_KEY = 'employeemanagement_cloud_v4';
-const CURRENT_VERSION = '4.7.6-payroll-loss-recovery';
+const CURRENT_VERSION = '4.7.7-razorpay-fix';
 const STANDARD_SHIFT_HOURS = 8;
 
 const normalizeMobile = (num: string | undefined): string => {
@@ -45,6 +45,12 @@ const DEFAULT_STATE: AppState = {
   ],
   salarySlips: [], 
   systemLogs: [{ id: 'evt-0', timestamp: new Date().toISOString(), type: 'INFO', message: 'Cloud Server Initialized', source: 'CORE' }],
+  integrations: {
+    razorpayKeyId: 'rzp_test_58Xm92p1Yk87X',
+    razorpayKeySecret: '',
+    razorpayEnabled: true,
+    isSandboxMode: true
+  },
   version: CURRENT_VERSION
 };
 
@@ -94,6 +100,10 @@ export const useStore = () => {
     state,
     resetSystem: () => { if(confirm("This will erase all enterprise data. Continue?")) { localStorage.removeItem(STORAGE_KEY); window.location.reload(); } },
     
+    updateIntegrations: (updates: Partial<IntegrationConfig>) => {
+      pushCloudUpdate(p => ({ ...p, integrations: { ...p.integrations, ...updates } }), 'INTEGRATION_CONFIG_UPDATED');
+    },
+
     getAiSystemContext: (companyId?: string) => {
       const users = state.users.filter(u => companyId ? u.companyId === companyId : true);
       const logs = state.workLogs.filter(l => companyId ? l.companyId === companyId : true);

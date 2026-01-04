@@ -23,7 +23,8 @@ const App: React.FC = () => {
     addSite, removeSite, markAttendance, updateAttendance, removeAttendance, addWorkLog, 
     addFinancialRequest, updateRequestStatus, generateMonthlySlips, 
     addManualSalarySlip, updateSalaryStatus, removeCompany, purchaseSubscription,
-    updateSubscriptionPlanConfig, getAiSystemContext, updateTaskStatus, addProject, addTask
+    updateSubscriptionPlanConfig, getAiSystemContext, updateTaskStatus, addProject, addTask,
+    updateIntegrations
   } = useStore();
   
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
@@ -214,7 +215,7 @@ const App: React.FC = () => {
              {activeTab === 'financials' && <FinancialManagement user={currentUser} state={state} addRequest={addFinancialRequest} updateStatus={updateRequestStatus} generateMonthlySlips={generateMonthlySlips} addManualSalarySlip={addManualSalarySlip} updateSalaryStatus={updateSalaryStatus} />}
              {activeTab === 'users' && <UserManagement user={currentUser} state={state} addUser={addUser} updateUser={updateUser} removeUser={removeUser} />}
              {activeTab === 'subscription' && <SubscriptionCenter user={currentUser} state={state} updatePlan={updateSubscriptionPlanConfig} purchasePlan={purchaseSubscription} removeUser={removeUser} />}
-             {activeTab === 'backend' && <BackendConsole state={state} updateUser={updateUser} updateCompanyStatus={updateCompanyStatus} removeUser={removeUser} removeCompany={removeCompany} purchaseSubscription={purchaseSubscription} addSite={addSite} removeSite={removeSite} />}
+             {activeTab === 'backend' && <BackendConsole state={state} updateUser={updateUser} updateCompanyStatus={updateCompanyStatus} removeUser={removeUser} removeCompany={removeCompany} purchaseSubscription={purchaseSubscription} addSite={addSite} removeSite={removeSite} updateIntegrations={updateIntegrations} />}
              {activeTab === 'legal' && <LegalCompliance />}
           </div>
         </main>

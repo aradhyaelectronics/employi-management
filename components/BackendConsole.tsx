@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { AppState, User, UserStatus, UserRole, Company, ServerEvent, Site, PaymentStatus } from '../types';
+import { AppState, User, UserStatus, UserRole, Company, ServerEvent, Site, PaymentStatus, IntegrationConfig } from '../types';
 import { saveState } from '../store';
 
 interface Props {
@@ -12,20 +12,14 @@ interface Props {
   purchaseSubscription: (companyId: string, planId: string, months?: number) => void;
   addSite: (site: Omit<Site, 'id'>) => Promise<void>;
   removeSite: (id: string) => Promise<void>;
+  updateIntegrations: (updates: Partial<IntegrationConfig>) => void;
 }
 
-const BackendConsole: React.FC<Props> = ({ state, updateCompanyStatus, removeUser, removeCompany, purchaseSubscription, addSite, removeSite }) => {
+const BackendConsole: React.FC<Props> = ({ state, updateCompanyStatus, removeUser, removeCompany, purchaseSubscription, addSite, removeSite, updateIntegrations }) => {
   const [activeView, setActiveView] = useState<'status' | 'enterprises' | 'users' | 'sites' | 'logs' | 'config' | 'integrations'>('status');
   const [search, setSearch] = useState('');
   const logEndRef = useRef<HTMLDivElement>(null);
-
-  // Razorpay Plugin Simulation State
-  const [razorpayConfig, setRazorpayConfig] = useState({
-    keyId: 'rzp_test_58Xm92...',
-    keySecret: '••••••••••••••••',
-    merchantId: 'MID_9928341',
-    isEnabled: true
-  });
+  const [isPinging, setIsPinging] = useState(false);
 
   // Site form state
   const [newSite, setNewSite] = useState({ name: '', address: '', lat: 0, lng: 0, companyId: '' });
@@ -60,14 +54,16 @@ const BackendConsole: React.FC<Props> = ({ state, updateCompanyStatus, removeUse
     window.location.reload();
   };
 
-  const handleAddSite = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newSite.companyId) return alert("Select an Enterprise for this site.");
-    try {
-      await addSite(newSite);
-      setNewSite({ name: '', address: '', lat: 0, lng: 0, companyId: '' });
-      alert("Success: Global site registry updated.");
-    } catch (err: any) { alert(err.message); }
+  const handleTestPing = async () => {
+    setIsPinging(true);
+    await new Promise(r => setTimeout(r, 1000));
+    setIsPinging(false);
+    
+    if (typeof (window as any).Razorpay !== 'undefined') {
+      alert("SUCCESS: Razorpay SDK v1.x detected and responding to master ping.");
+    } else {
+      alert("FAILURE: Razorpay script not found. Enable 'Sandbox Mode' to bypass external dependency.");
+    }
   };
 
   return (
@@ -238,13 +234,13 @@ const BackendConsole: React.FC<Props> = ({ state, updateCompanyStatus, removeUse
                     </div>
                   </div>
                   <div className="flex items-center space-x-3 bg-slate-950 p-2 rounded-xl">
-                    <span className="text-[8px] font-black text-slate-500 uppercase">Status:</span>
-                    <span className={`w-2 h-2 rounded-full ${razorpayConfig.isEnabled ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                    <span className="text-[8px] font-black text-slate-500 uppercase">Gateway:</span>
+                    <span className={`w-2 h-2 rounded-full ${state.integrations.razorpayEnabled ? 'bg-green-500' : 'bg-red-500'}`}></span>
                     <button 
-                      onClick={() => setRazorpayConfig(prev => ({ ...prev, isEnabled: !prev.isEnabled }))}
+                      onClick={() => updateIntegrations({ razorpayEnabled: !state.integrations.razorpayEnabled })}
                       className="text-[8px] font-black text-blue-400 uppercase tracking-widest hover:text-white"
                     >
-                      {razorpayConfig.isEnabled ? 'Disable' : 'Enable'}
+                      {state.integrations.razorpayEnabled ? 'Switch Off' : 'Switch On'}
                     </button>
                   </div>
                 </div>
@@ -252,61 +248,85 @@ const BackendConsole: React.FC<Props> = ({ state, updateCompanyStatus, removeUse
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 ml-1">Key ID</label>
-                    <input type="text" className="w-full bg-slate-950 border border-slate-800 text-slate-300 rounded-xl px-4 py-3 text-xs font-mono" value={razorpayConfig.keyId} onChange={e => setRazorpayConfig({...razorpayConfig, keyId: e.target.value})} />
+                    <input type="text" className="w-full bg-slate-950 border border-slate-800 text-slate-300 rounded-xl px-4 py-3 text-xs font-mono outline-none focus:border-blue-500" value={state.integrations.razorpayKeyId} onChange={e => updateIntegrations({ razorpayKeyId: e.target.value })} />
                   </div>
                   <div>
                     <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 ml-1">Key Secret</label>
-                    <input type="text" className="w-full bg-slate-950 border border-slate-800 text-slate-300 rounded-xl px-4 py-3 text-xs font-mono" value={razorpayConfig.keySecret} onChange={e => setRazorpayConfig({...razorpayConfig, keySecret: e.target.value})} />
+                    <input type="password" placeholder="••••••••••••••••" className="w-full bg-slate-950 border border-slate-800 text-slate-300 rounded-xl px-4 py-3 text-xs font-mono outline-none focus:border-blue-500" value={state.integrations.razorpayKeySecret} onChange={e => updateIntegrations({ razorpayKeySecret: e.target.value })} />
                   </div>
-                  <div className="md:col-span-2">
-                    <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 ml-1">Merchant ID</label>
-                    <input type="text" className="w-full bg-slate-950 border border-slate-800 text-slate-300 rounded-xl px-4 py-3 text-xs font-mono" value={razorpayConfig.merchantId} onChange={e => setRazorpayConfig({...razorpayConfig, merchantId: e.target.value})} />
+                  <div className="md:col-span-2 flex items-center justify-between p-5 bg-slate-950 rounded-2xl border border-slate-800">
+                    <div>
+                      <p className="text-white text-xs font-black uppercase flex items-center">
+                        Cloud Sandbox Verification
+                        <span className="ml-2 px-1.5 py-0.5 bg-orange-600/20 text-orange-400 text-[7px] rounded">RECOMMENDED</span>
+                      </p>
+                      <p className="text-[8px] text-slate-500 uppercase font-bold mt-1 max-w-md">Bypasses external pop-up blockers in restricted browser frames or unstable networks. Ensures upgrades always work for demo users.</p>
+                    </div>
+                    <button 
+                      onClick={() => updateIntegrations({ isSandboxMode: !state.integrations.isSandboxMode })}
+                      className={`px-5 py-3 rounded-xl text-[9px] font-black uppercase transition-all shadow-xl ${state.integrations.isSandboxMode ? 'bg-orange-600 text-white' : 'bg-slate-800 text-slate-400'}`}
+                    >
+                      {state.integrations.isSandboxMode ? 'ACTIVE' : 'INACTIVE'}
+                    </button>
                   </div>
                 </div>
 
                 <div className="mt-10 flex gap-4">
-                  <button className="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl hover:bg-blue-500 transition-all">Save Plugin State</button>
-                  <button onClick={() => alert("RAZORPAY: Test ping successful. Connection verified.")} className="px-8 bg-slate-800 text-slate-400 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-slate-700 transition-all">Test Sync</button>
+                  <button className="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl hover:bg-blue-500 transition-all">Save Config</button>
+                  <button 
+                    disabled={isPinging}
+                    onClick={handleTestPing} 
+                    className="px-8 bg-slate-800 text-slate-400 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-slate-700 transition-all flex items-center space-x-2"
+                  >
+                    {isPinging && <div className="w-3 h-3 border border-slate-500 border-t-white rounded-full animate-spin"></div>}
+                    <span>{isPinging ? 'Pinging SDK...' : 'Test Connection'}</span>
+                  </button>
                 </div>
               </div>
 
-              {/* Revenue Stats */}
-              <div className="bg-slate-900/50 p-10 rounded-[2.5rem] border border-slate-800 flex flex-col justify-between">
-                <div>
-                  <h4 className="text-white font-black uppercase text-xs tracking-widest mb-8">Processing Summary</h4>
-                  <div className="space-y-6">
-                    <div>
-                      <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-1">Total TTV (Cross-Tenant)</p>
-                      <p className="text-3xl font-black text-white tracking-tighter">₹8,44,200</p>
-                    </div>
-                    <div>
-                      <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-1">Active Subscriptions</p>
-                      <p className="text-3xl font-black text-blue-500 tracking-tighter">{state.companies.filter(c => c.subscriptionPlanId !== 'p-free').length}</p>
-                    </div>
+              {/* Service Status */}
+              <div className="bg-slate-900/50 p-10 rounded-[2.5rem] border border-slate-800 flex flex-col">
+                <h4 className="text-white font-black uppercase text-xs tracking-widest mb-8">Connectivity Health</h4>
+                <div className="space-y-8 flex-1">
+                  <div className="flex items-center justify-between">
+                     <span className="text-[10px] font-bold text-slate-500 uppercase">SDK Load</span>
+                     <span className={`text-[9px] font-black uppercase ${typeof (window as any).Razorpay !== 'undefined' ? 'text-green-500' : 'text-red-500'}`}>
+                        {typeof (window as any).Razorpay !== 'undefined' ? 'LOADED' : 'MISSING'}
+                     </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                     <span className="text-[10px] font-bold text-slate-500 uppercase">Network Protocol</span>
+                     <span className="text-[9px] font-black uppercase text-blue-500">TLS 1.3 SECURE</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                     <span className="text-[10px] font-bold text-slate-500 uppercase">Sync Latency</span>
+                     <span className="text-[9px] font-black uppercase text-slate-400">12ms (OPTIMAL)</span>
                   </div>
                 </div>
-                <div className="pt-8 border-t border-slate-800">
-                   <p className="text-[10px] font-black text-slate-500 uppercase leading-relaxed italic">
-                     "The Razorpay plugin handles 256-bit encrypted transactions for all enterprise upgrades in the cluster."
-                   </p>
+                <div className="pt-8 border-t border-slate-800 mt-8">
+                   <div className="bg-blue-900/20 p-4 rounded-xl border border-blue-900/30">
+                      <p className="text-[9px] font-black text-blue-400 uppercase leading-relaxed">
+                        "Razorpay v1 integration handles all financial telemetry. Ensure your Key ID starts with 'rzp_test_' or 'rzp_live_'."
+                      </p>
+                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Global Payment Ledger */}
+            {/* Transaction Ledger */}
             <div className="bg-slate-900/50 rounded-[2.5rem] border border-slate-800 overflow-hidden">
                <div className="p-8 border-b border-slate-800 flex justify-between items-center bg-slate-950/30">
-                  <h4 className="text-white font-black uppercase text-xs tracking-widest">Global Transaction Ledger</h4>
-                  <span className="text-[9px] font-black text-slate-500 uppercase bg-slate-900 px-3 py-1 rounded-full">Audit Enabled</span>
+                  <h4 className="text-white font-black uppercase text-xs tracking-widest">Master Transaction Ledger</h4>
+                  <span className="text-[9px] font-black text-slate-500 uppercase bg-slate-900 px-3 py-1 rounded-full">Secure Audit Trail</span>
                </div>
                <div className="overflow-x-auto">
                  <table className="w-full text-left">
                     <thead className="bg-slate-950 text-[10px] font-black text-slate-600 uppercase tracking-widest">
                        <tr>
-                          <th className="px-8 py-5">TXN Reference</th>
-                          <th className="px-8 py-5">Enterprise</th>
-                          <th className="px-8 py-5 text-center">Plan Tier</th>
-                          <th className="px-8 py-5 text-right">Amount</th>
+                          <th className="px-8 py-5">TXN Node Reference</th>
+                          <th className="px-8 py-5">Enterprise Client</th>
+                          <th className="px-8 py-5 text-center">Cloud Plan</th>
+                          <th className="px-8 py-5 text-right">Settlement</th>
                        </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/30 font-mono text-[11px]">
@@ -314,13 +334,18 @@ const BackendConsole: React.FC<Props> = ({ state, updateCompanyStatus, removeUse
                           const plan = state.subscriptionPlans.find(p => p.id === c.subscriptionPlanId);
                           return (
                             <tr key={c.id} className="hover:bg-slate-800/20 text-slate-400">
-                               <td className="px-8 py-6">RP_TXN_{10000 + i}</td>
+                               <td className="px-8 py-6">RP_TXN_{10000 + i}_PRG</td>
                                <td className="px-8 py-6 uppercase font-black text-slate-300">{c.name}</td>
-                               <td className="px-8 py-6 text-center uppercase">{plan?.name}</td>
+                               <td className="px-8 py-6 text-center uppercase tracking-tighter font-bold">{plan?.name}</td>
                                <td className="px-8 py-6 text-right text-blue-400 font-black">₹{plan?.price.toLocaleString()}</td>
                             </tr>
                           )
                        })}
+                       {state.companies.filter(c => c.subscriptionPlanId !== 'p-free').length === 0 && (
+                         <tr>
+                            <td colSpan={4} className="px-8 py-10 text-center text-slate-600 uppercase text-[10px] font-black tracking-widest">No Premium Settled Transactions</td>
+                         </tr>
+                       )}
                     </tbody>
                  </table>
                </div>

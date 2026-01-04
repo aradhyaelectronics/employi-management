@@ -187,6 +187,13 @@ export interface SubscriptionPlan {
   features: string[];
 }
 
+export interface IntegrationConfig {
+  razorpayKeyId: string;
+  razorpayKeySecret: string;
+  razorpayEnabled: boolean;
+  isSandboxMode: boolean;
+}
+
 export interface AppState {
   users: User[];
   companies: Company[];
@@ -200,5 +207,6 @@ export interface AppState {
   subscriptionPlans: SubscriptionPlan[];
   salarySlips: MonthlySalarySlip[];
   systemLogs: ServerEvent[];
+  integrations: IntegrationConfig;
   version: string;
 }
