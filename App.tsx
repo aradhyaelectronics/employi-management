@@ -12,6 +12,7 @@ import SubscriptionCenter from './components/SubscriptionCenter';
 import BackendConsole from './components/BackendConsole';
 import LegalCompliance from './components/LegalCompliance';
 import LockScreen from './components/LockScreen';
+import ProjectConsole from './components/ProjectConsole';
 
 const SESSION_KEY = 'employeemanagement_session_v4';
 
@@ -22,7 +23,7 @@ const App: React.FC = () => {
     addSite, removeSite, markAttendance, updateAttendance, removeAttendance, addWorkLog, 
     addFinancialRequest, updateRequestStatus, generateMonthlySlips, 
     addManualSalarySlip, updateSalaryStatus, removeCompany, purchaseSubscription,
-    updateSubscriptionPlanConfig, getAiSystemContext
+    updateSubscriptionPlanConfig, getAiSystemContext, updateTaskStatus, addProject, addTask
   } = useStore();
   
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
@@ -63,6 +64,7 @@ const App: React.FC = () => {
         { id: 'dashboard', label: 'My Desk', icon: ICONS.Dashboard },
         { id: 'users', label: 'Workforce', icon: ICONS.Users },
         { id: 'attendance', label: 'Attendance', icon: ICONS.Time },
+        { id: 'projects', label: 'Projects', icon: ICONS.Work },
         { id: 'work', label: 'Work Logs', icon: ICONS.Work },
         { id: 'financials', label: 'Payroll', icon: ICONS.Money },
         { id: 'subscription', label: 'Subscription', icon: ICONS.Rocket },
@@ -73,6 +75,7 @@ const App: React.FC = () => {
       return [
         { id: 'dashboard', label: 'Field Status', icon: ICONS.Dashboard },
         { id: 'attendance', label: 'Presence', icon: ICONS.Time },
+        { id: 'projects', label: 'Milestones', icon: ICONS.Work },
         { id: 'work', label: 'Verification', icon: ICONS.Work },
         { id: 'legal', label: 'Compliance', icon: ICONS.Shield }
       ];
@@ -80,6 +83,7 @@ const App: React.FC = () => {
     return [
       { id: 'dashboard', label: 'My Desk', icon: ICONS.Dashboard },
       { id: 'attendance', label: 'Clock In/Out', icon: ICONS.Time },
+      { id: 'projects', label: 'My Tasks', icon: ICONS.Work },
       { id: 'work', label: 'My Work', icon: ICONS.Work },
       { id: 'financials', label: 'Payments', icon: ICONS.Money },
       { id: 'legal', label: 'Vision', icon: ICONS.Shield }
@@ -102,7 +106,7 @@ const App: React.FC = () => {
       if (isLogin) {
         const user = authenticate(formData.identifier, formData.secret);
         if (user) setCurrentUser(user);
-        else setAuthError("Security Failure: Identifier or Secret mismatch.");
+        else setAuthError("Security Failure: ID/Number or PIN/Secret mismatch.");
       } else {
         if (isSystemLogin) {
           const u = await addUser({ name: formData.name, email: formData.identifier, password: formData.secret, role: UserRole.SUPER_ADMIN, companyId: 'SYSTEM', status: UserStatus.ACTIVE });
@@ -121,7 +125,7 @@ const App: React.FC = () => {
       <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md p-10 text-center animate-in zoom-in-95 duration-500">
         <Logo iconClassName="w-20 h-16 mx-auto mb-6" showText={false} />
         <h2 className="text-2xl font-black uppercase mb-2 text-slate-800 tracking-tighter">{isLogin ? 'Personnel Login' : 'Launch Enterprise'}</h2>
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-8">{isLogin ? 'ID / Mobile / Email & Security Secret' : 'Infrastructure Registration'}</p>
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-8">{isLogin ? 'Login with ID or Mobile Number' : 'Infrastructure Registration'}</p>
         
         {authError && <div className="mb-6 bg-red-50 text-red-600 p-4 rounded-2xl text-[10px] font-black uppercase border border-red-100">{authError}</div>}
         
@@ -132,8 +136,14 @@ const App: React.FC = () => {
               <input type="text" placeholder="Full Name" className="w-full px-6 py-5 bg-gray-50 rounded-2xl border outline-none font-bold text-sm" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required />
             </>
           )}
-          <input type="text" placeholder={isLogin ? "ID / Mobile / Email" : "Email ID"} className="w-full px-6 py-5 bg-gray-50 rounded-2xl border outline-none font-black text-sm text-center uppercase tracking-widest" value={formData.identifier} onChange={e => setFormData({...formData, identifier: e.target.value})} required />
-          <input type="password" placeholder={isLogin ? "PIN / Password" : "Master Password"} maxLength={isLogin ? 20 : 40} className="w-full px-6 py-5 bg-gray-50 rounded-2xl border outline-none font-black text-xl text-center tracking-[0.2em]" value={formData.secret} onChange={e => setFormData({...formData, secret: e.target.value})} required />
+          <div className="space-y-1">
+            <label className="block text-[8px] font-black text-slate-400 uppercase text-left ml-2 tracking-widest">Login ID / Number</label>
+            <input type="text" placeholder="e.g. PR-EMP-1234" className="w-full px-6 py-5 bg-gray-50 rounded-2xl border outline-none font-black text-sm text-center uppercase tracking-widest focus:ring-2 focus:ring-blue-100 transition-all" value={formData.identifier} onChange={e => setFormData({...formData, identifier: e.target.value})} required />
+          </div>
+          <div className="space-y-1">
+            <label className="block text-[8px] font-black text-slate-400 uppercase text-left ml-2 tracking-widest">Security PIN / Password</label>
+            <input type="password" placeholder="****" maxLength={isLogin ? 20 : 40} className="w-full px-6 py-5 bg-gray-50 rounded-2xl border outline-none font-black text-xl text-center tracking-[0.2em] focus:ring-2 focus:ring-blue-100 transition-all" value={formData.secret} onChange={e => setFormData({...formData, secret: e.target.value})} required />
+          </div>
           <button type="submit" className="w-full bg-orange-600 text-white py-5 rounded-2xl font-black uppercase tracking-widest hover:bg-orange-700 transition-all shadow-xl shadow-orange-900/20 active:scale-95">
             {isLogin ? 'Unlock Portal' : 'Create Cluster'}
           </button>
@@ -197,8 +207,9 @@ const App: React.FC = () => {
 
         <main className="p-4 md:p-10 flex-1 overflow-y-auto pb-32 md:pb-10 bg-slate-50/30">
           <div className="max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-2 duration-500">
-             {activeTab === 'dashboard' && <Dashboard user={currentUser} state={state} getAiSystemContext={getAiSystemContext} updatePassword={updateUserPassword} />}
+             {activeTab === 'dashboard' && <Dashboard user={currentUser} state={state} getAiSystemContext={getAiSystemContext} updatePassword={updateUserPassword} updateTaskStatus={updateTaskStatus} />}
              {activeTab === 'attendance' && <AttendancePanel user={currentUser} state={state} markAttendance={markAttendance} updateAttendance={updateAttendance} removeAttendance={removeAttendance} addSite={addSite} removeSite={removeSite} />}
+             {activeTab === 'projects' && <ProjectConsole user={currentUser} state={state} addProject={addProject} addTask={addTask} updateTaskStatus={updateTaskStatus} />}
              {activeTab === 'work' && <WorkTracking user={currentUser} state={state} addWorkLog={addWorkLog} />}
              {activeTab === 'financials' && <FinancialManagement user={currentUser} state={state} addRequest={addFinancialRequest} updateStatus={updateRequestStatus} generateMonthlySlips={generateMonthlySlips} addManualSalarySlip={addManualSalarySlip} updateSalaryStatus={updateSalaryStatus} />}
              {activeTab === 'users' && <UserManagement user={currentUser} state={state} addUser={addUser} updateUser={updateUser} removeUser={removeUser} />}

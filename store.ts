@@ -223,6 +223,11 @@ export const useStore = () => {
     addManualSalarySlip: async (slip: any) => pushCloudUpdate(p => ({ ...p, salarySlips: [...p.salarySlips, { ...slip, id: `slip-m-${Date.now()}`, generatedDate: new Date().toISOString() }] })),
     updateSalaryStatus: async (id: string, status: PaymentStatus) => pushCloudUpdate(p => ({ ...p, salarySlips: p.salarySlips.map(s => s.id === id ? { ...s, status } : s) })),
     updateUserPin: async (id: string, pin: string) => pushCloudUpdate(p => ({ ...p, users: p.users.map(u => u.id === id ? { ...u, pin } : u) })),
-    updateUserPassword: async (id: string, password: string) => pushCloudUpdate(p => ({ ...p, users: p.users.map(u => u.id === id ? { ...u, password } : u) }))
+    updateUserPassword: async (id: string, password: string) => pushCloudUpdate(p => ({ ...p, users: p.users.map(u => u.id === id ? { ...u, password } : u) })),
+
+    // Project and Task Management Functions
+    addProject: async (p: any) => pushCloudUpdate(prev => ({ ...prev, projects: [...prev.projects, { ...p, id: `p-${Date.now()}` }] }), `PROJECT_CREATED: ${p.name}`),
+    addTask: async (t: any) => pushCloudUpdate(prev => ({ ...prev, tasks: [...prev.tasks, { ...t, id: `t-${Date.now()}`, status: 'TODO' }] }), `TASK_CREATED: ${t.name}`),
+    updateTaskStatus: async (id: string, status: 'TODO' | 'IN_PROGRESS' | 'DONE') => pushCloudUpdate(prev => ({ ...prev, tasks: prev.tasks.map(t => t.id === id ? { ...t, status } : t) }), `TASK_STATUS_SYNC: ${id} -> ${status}`)
   };
 };

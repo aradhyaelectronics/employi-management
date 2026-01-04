@@ -17,7 +17,12 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
   const [filterWorkType, setFilterWorkType] = useState('');
   const [filterSite, setFilterSite] = useState('');
   
+  const isAdmin = user.role === UserRole.ADMIN || user.role === UserRole.SUPER_ADMIN;
+  const isSuper = user.role === UserRole.SUPER_ADMIN;
+  const isSupervisor = user.role === UserRole.SUPERVISOR;
+
   const [logData, setLogData] = useState({
+    userId: user.id, // Defaults to current user
     installationDate: new Date().toISOString().split('T')[0],
     siteId: '',
     workType: WorkType.CABLE_LAYING as string,
@@ -28,19 +33,24 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
     taskId: ''
   });
 
-  const isAdmin = user.role === UserRole.ADMIN || user.role === UserRole.SUPER_ADMIN;
-  const isSuper = user.role === UserRole.SUPER_ADMIN;
-
   const companySites = useMemo(() => state.sites.filter(s => s.companyId === user.companyId), [state.sites, user.companyId]);
-  const companyEmployees = useMemo(() => state.users.filter(u => u.companyId === user.companyId), [state.users, user.companyId]);
+  
+  const selectablePersonnel = useMemo(() => {
+    const users = state.users.filter(u => u.companyId === user.companyId);
+    if (isAdmin) return users;
+    if (isSupervisor) return users.filter(u => u.id === user.id || u.supervisorId === user.id);
+    return []; // Employees don't get to select
+  }, [state.users, user, isAdmin, isSupervisor]);
+
   const companySupervisors = useMemo(() => state.users.filter(u => u.companyId === user.companyId && u.role === UserRole.SUPERVISOR), [state.users, user.companyId]);
+  const companyEmployees = useMemo(() => state.users.filter(u => u.companyId === user.companyId), [state.users, user.companyId]);
 
-  // Find tasks assigned specifically to the user for milestone reporting
+  // Tasks based on selected userId in the form
   const relevantTasks = useMemo(() => {
-    return state.tasks.filter(t => t.assignedTo === user.id && t.status !== 'DONE');
-  }, [state.tasks, user.id]);
+    return state.tasks.filter(t => t.assignedTo === logData.userId && t.status !== 'DONE');
+  }, [state.tasks, logData.userId]);
 
-  // Auto-select site if only one exists in the registry
+  // Auto-select site if only one exists
   useEffect(() => {
     if (companySites.length === 1 && !logData.siteId) {
       setLogData(prev => ({ ...prev, siteId: companySites[0].id }));
@@ -49,12 +59,12 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!logData.siteId) return alert('CRITICAL: Please select a Project Site (Node) to continue.');
+    if (!logData.siteId) return alert('CRITICAL: Please select a Project Site (Node).');
     if (logData.meters <= 0) return alert('Quantity must be greater than zero.');
     
     try {
       await addWorkLog({
-        userId: user.id, 
+        userId: logData.userId, 
         companyId: user.companyId, 
         siteId: logData.siteId,
         date: new Date().toISOString().split('T')[0], 
@@ -75,11 +85,12 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
         meters: 0, 
         description: 'General Progress', 
         taskId: ''
+        // userId persists to allow batch logging for the same person
       }));
       
       alert("Telemetry entry committed successfully.");
     } catch (error: any) { 
-      alert("System Error: Progress transmission failed. Please check connectivity."); 
+      alert("System Error: Progress transmission failed."); 
     }
   };
 
@@ -99,16 +110,13 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
       const isAfterStart = startDate ? activityDate >= startDate : true;
       const isBeforeEnd = endDate ? activityDate <= endDate : true;
 
-      // Primary Telemetry Filters
       const isEmployeeMatch = filterEmployee ? log.userId === filterEmployee : true;
       const isWorkTypeMatch = filterWorkType ? log.workType === filterWorkType : true;
       const isSiteMatch = filterSite ? log.siteId === filterSite : true;
       
-      // Supervisor Hierarchical Filter (Track logs of employees under a specific supervisor)
       const logUser = state.users.find(u => u.id === log.userId);
       const isSupervisorMatch = filterSupervisor ? logUser?.supervisorId === filterSupervisor : true;
 
-      // Global Keyword Search
       const isSearchMatch = searchQuery 
         ? (log.description?.toLowerCase().includes(searchQuery.toLowerCase()) || 
            log.workType?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -120,13 +128,8 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
   }, [state.workLogs, user, startDate, endDate, filterEmployee, filterWorkType, filterSite, filterSupervisor, searchQuery, state.users]);
 
   const resetFilters = () => {
-    setStartDate('');
-    setEndDate('');
-    setSearchQuery('');
-    setFilterEmployee('');
-    setFilterSupervisor('');
-    setFilterWorkType('');
-    setFilterSite('');
+    setStartDate(''); setEndDate(''); setSearchQuery(''); setFilterEmployee(''); 
+    setFilterSupervisor(''); setFilterWorkType(''); setFilterSite('');
   };
 
   const isAnyFilterActive = !!(startDate || endDate || searchQuery || filterEmployee || filterSupervisor || filterWorkType || filterSite);
@@ -148,6 +151,26 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
               <span className="w-6 h-1 bg-orange-500 mr-2"></span> Log Activity
             </h3>
             <form onSubmit={handleSubmit} className="space-y-4">
+              
+              {/* Personnel Selector for Leaders */}
+              {(isAdmin || isSupervisor) && (
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-blue-600 uppercase tracking-widest ml-1">Reporting For</label>
+                  <select 
+                    required 
+                    className="w-full px-4 py-2.5 bg-blue-50 border border-blue-100 rounded-xl outline-none font-black text-blue-900 text-xs cursor-pointer"
+                    value={logData.userId}
+                    onChange={e => setLogData({ ...logData, userId: e.target.value, taskId: '' })}
+                  >
+                    {selectablePersonnel.map(u => (
+                      <option key={u.id} value={u.id}>
+                        {u.id === user.id ? 'Self (Me)' : u.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Activity Date</label>
                 <input type="date" required className="w-full px-4 py-2.5 bg-gray-50 border rounded-xl outline-none text-xs font-black uppercase" value={logData.installationDate} onChange={e => setLogData({ ...logData, installationDate: e.target.value })} />
@@ -161,36 +184,25 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
                   value={logData.siteId} 
                   onChange={e => setLogData({ ...logData, siteId: e.target.value })}
                 >
-                  <option value="">Choose Site Registry...</option>
-                  {companySites.map(s => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
+                  <option value="">Choose Site Node...</option>
+                  {companySites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
 
               {/* TASK MILESTONE DROPDOWN */}
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-blue-600 uppercase tracking-widest ml-1">Assigned Task Milestone</label>
+                <label className="text-[10px] font-black text-indigo-600 uppercase tracking-widest ml-1">Milestone Achievement</label>
                 <select 
-                  className="w-full px-4 py-2.5 bg-blue-50 border border-blue-100 rounded-xl outline-none font-black text-blue-900 text-xs cursor-pointer focus:ring-2 focus:ring-blue-200 transition-all" 
+                  className="w-full px-4 py-2.5 bg-indigo-50 border border-indigo-100 rounded-xl outline-none font-black text-indigo-900 text-xs cursor-pointer" 
                   value={logData.taskId} 
                   onChange={e => setLogData({ ...logData, taskId: e.target.value })}
                 >
-                  <option value="">General Work (No Task)</option>
+                  <option value="">General Work (No Milestone)</option>
                   {relevantTasks.map(t => {
                     const project = state.projects.find(p => p.id === t.projectId);
-                    return (
-                      <option key={t.id} value={t.id}>
-                        {project ? `[${project.name}] ` : ''}{t.name}
-                      </option>
-                    );
+                    return <option key={t.id} value={t.id}>{project ? `[${project.name}] ` : ''}{t.name}</option>;
                   })}
                 </select>
-                {relevantTasks.length === 0 && (
-                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">No pending tasks assigned.</p>
-                )}
               </div>
 
               <div className="space-y-2">
@@ -229,111 +241,53 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
                 </div>
                 
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full xl:w-auto">
-                   <div className="relative group flex-1">
-                      <input 
-                        type="text" 
-                        placeholder="Search logs or personnel..." 
-                        className="w-full sm:w-64 pl-10 pr-4 py-2.5 bg-white border rounded-xl text-xs font-bold outline-none focus:border-blue-500 transition-all shadow-sm"
-                        value={searchQuery}
-                        onChange={e => setSearchQuery(e.target.value)}
-                      />
-                      <svg className="w-4 h-4 absolute left-3 top-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                   </div>
-
+                   <input 
+                    type="text" 
+                    placeholder="Search logs or personnel..." 
+                    className="w-full sm:w-64 px-4 py-2.5 bg-white border rounded-xl text-xs font-bold outline-none focus:border-blue-500 transition-all shadow-sm"
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                   />
                    <div className="flex items-center gap-2">
-                      <input 
-                        type="date" 
-                        className="px-3 py-2 bg-white border rounded-xl text-[10px] font-black uppercase outline-none focus:border-blue-500" 
-                        value={startDate} 
-                        onChange={e => setStartDate(e.target.value)} 
-                      />
-                      <span className="text-gray-300 font-black">→</span>
-                      <input 
-                        type="date" 
-                        className="px-3 py-2 bg-white border rounded-xl text-[10px] font-black uppercase outline-none focus:border-blue-500" 
-                        value={endDate} 
-                        onChange={e => setEndDate(e.target.value)} 
-                      />
-                      {isAnyFilterActive && (
-                        <button 
-                          onClick={resetFilters} 
-                          className="px-4 py-2 bg-red-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-red-700 transition-all shadow-lg shadow-red-200"
-                        >
-                           Clear All
-                        </button>
-                      )}
+                      <input type="date" className="px-3 py-2 bg-white border rounded-xl text-[10px] font-black uppercase" value={startDate} onChange={e => setStartDate(e.target.value)} />
+                      <span className="text-gray-300">→</span>
+                      <input type="date" className="px-3 py-2 bg-white border rounded-xl text-[10px] font-black uppercase" value={endDate} onChange={e => setEndDate(e.target.value)} />
                    </div>
                 </div>
              </div>
 
-             {/* Dynamic Registry Filters */}
+             {/* Registry Filters */}
              <div className="px-8 py-4 bg-gray-50/30 border-b flex flex-wrap gap-8 items-center">
                 <div className="flex flex-col min-w-[140px]">
-                   <span className="text-[8px] font-black text-blue-600 uppercase tracking-widest mb-1 flex items-center gap-1">
-                     <span className="w-1 h-1 bg-blue-600 rounded-full"></span> Target Site
-                   </span>
-                   <select 
-                    className="bg-transparent text-[10px] font-black uppercase outline-none text-slate-700 cursor-pointer hover:text-blue-600 transition-colors" 
-                    value={filterSite} 
-                    onChange={e => setFilterSite(e.target.value)}
-                   >
-                      <option value="">All Project Nodes</option>
+                   <span className="text-[8px] font-black text-blue-600 uppercase mb-1">Target Site</span>
+                   <select className="bg-transparent text-[10px] font-black uppercase outline-none text-slate-700" value={filterSite} onChange={e => setFilterSite(e.target.value)}>
+                      <option value="">All Sites</option>
                       {companySites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                    </select>
                 </div>
                 
-                <div className="h-6 w-px bg-gray-200"></div>
-
-                <div className="flex flex-col min-w-[140px]">
-                   <span className="text-[8px] font-black text-orange-600 uppercase tracking-widest mb-1 flex items-center gap-1">
-                     <span className="w-1 h-1 bg-orange-600 rounded-full"></span> Work Type
-                   </span>
-                   <select 
-                    className="bg-transparent text-[10px] font-black uppercase outline-none text-slate-700 cursor-pointer hover:text-orange-600 transition-colors" 
-                    value={filterWorkType} 
-                    onChange={e => setFilterWorkType(e.target.value)}
-                   >
-                      <option value="">All Categories</option>
-                      {Object.values(WorkType).map(wt => (
-                        <option key={wt} value={wt}>{wt}</option>
-                      ))}
-                   </select>
-                </div>
-
                 {(isAdmin || isSuper) && (
-                   <>
-                     <div className="h-6 w-px bg-gray-200"></div>
-                     <div className="flex flex-col min-w-[140px]">
-                        <span className="text-[8px] font-black text-indigo-600 uppercase tracking-widest mb-1 flex items-center gap-1">
-                          <span className="w-1 h-1 bg-indigo-600 rounded-full"></span> Team Lead
-                        </span>
-                        <select 
-                          className="bg-transparent text-[10px] font-black uppercase outline-none text-slate-700 cursor-pointer hover:text-indigo-600 transition-colors" 
-                          value={filterSupervisor} 
-                          onChange={e => setFilterSupervisor(e.target.value)}
-                        >
-                           <option value="">All Supervisors</option>
-                           {companySupervisors.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                        </select>
-                     </div>
-                   </>
+                   <div className="flex flex-col min-w-[140px]">
+                      <span className="text-[8px] font-black text-indigo-600 uppercase mb-1">Team Lead</span>
+                      <select className="bg-transparent text-[10px] font-black uppercase outline-none text-slate-700" value={filterSupervisor} onChange={e => setFilterSupervisor(e.target.value)}>
+                         <option value="">All Leads</option>
+                         {companySupervisors.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                      </select>
+                   </div>
                 )}
 
                 {user.role !== UserRole.EMPLOYEE && (
-                   <>
-                     <div className="h-6 w-px bg-gray-200"></div>
-                     <div className="flex flex-col min-w-[140px]">
-                        <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Personnel</span>
-                        <select 
-                          className="bg-transparent text-[10px] font-black uppercase outline-none text-slate-500 cursor-pointer hover:text-slate-800 transition-colors" 
-                          value={filterEmployee} 
-                          onChange={e => setFilterEmployee(e.target.value)}
-                        >
-                           <option value="">All Field Staff</option>
-                           {companyEmployees.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                        </select>
-                     </div>
-                   </>
+                   <div className="flex flex-col min-w-[140px]">
+                      <span className="text-[8px] font-black text-slate-400 uppercase mb-1">Field Staff</span>
+                      <select className="bg-transparent text-[10px] font-black uppercase outline-none text-slate-500" value={filterEmployee} onChange={e => setFilterEmployee(e.target.value)}>
+                         <option value="">All Staff</option>
+                         {companyEmployees.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                      </select>
+                   </div>
+                )}
+
+                {isAnyFilterActive && (
+                  <button onClick={resetFilters} className="text-[8px] font-black text-red-500 uppercase tracking-widest hover:underline ml-auto">Reset All</button>
                 )}
              </div>
 
@@ -343,9 +297,8 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
                    <tr>
                      <th className="px-8 py-5 text-[9px] font-black text-gray-400 uppercase tracking-widest">Personnel / Site</th>
                      <th className="px-8 py-5 text-[9px] font-black text-gray-400 uppercase tracking-widest">Classification</th>
-                     <th className="px-8 py-5 text-[9px] font-black text-blue-400 uppercase tracking-widest">Spec / Size</th>
                      <th className="px-8 py-5 text-[9px] font-black text-gray-400 uppercase tracking-widest text-center">Progress</th>
-                     <th className="px-8 py-5 text-[9px] font-black text-gray-400 uppercase tracking-widest text-right">Activity Date</th>
+                     <th className="px-8 py-5 text-[9px] font-black text-gray-400 uppercase tracking-widest text-right">Date</th>
                    </tr>
                  </thead>
                  <tbody className="divide-y divide-gray-50">
@@ -357,47 +310,22 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
                          <tr key={log.id} className="hover:bg-gray-50/50 transition-all group">
                             <td className="px-8 py-6">
                                <p className="font-black text-xs uppercase text-gray-800">{emp?.name}</p>
-                               <p className="text-[8px] font-black text-orange-600 uppercase tracking-widest mt-1">
-                                  <span className="inline-block w-1.5 h-1.5 bg-orange-500 rounded-full mr-1"></span>
-                                  {site?.name || 'GEN-NODE'}
-                               </p>
+                               <p className="text-[8px] font-black text-orange-600 uppercase mt-1">{site?.name || 'GEN-NODE'}</p>
                             </td>
                             <td className="px-8 py-6">
                                <p className="text-xs font-black text-blue-900 uppercase">{log.workType}</p>
-                               {task && (
-                                 <p className="text-[7px] font-black text-blue-500 uppercase tracking-widest mt-0.5 bg-blue-50 w-fit px-1 rounded">
-                                   Milestone: {task.name}
-                                 </p>
-                               )}
+                               {task && <p className="text-[7px] font-black text-blue-500 uppercase tracking-widest mt-0.5">M-STONE: {task.name}</p>}
                                <p className="text-[8px] font-bold text-gray-400 uppercase mt-0.5 line-clamp-1">{log.description}</p>
                             </td>
-                            <td className="px-8 py-6">
-                               <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100">
-                                  {log.subCategory}
-                               </span>
-                            </td>
                             <td className="px-8 py-6 text-center">
-                               <div className="flex flex-col items-center">
-                                  <span className="font-black text-green-600 text-lg">{log.meters} <span className="text-[8px] text-gray-400 uppercase">Unit</span></span>
-                               </div>
+                               <span className="font-black text-green-600 text-lg">{log.meters} <span className="text-[8px] text-gray-400 uppercase">Unit</span></span>
                             </td>
                             <td className="px-8 py-6 text-right font-black text-gray-400 text-[10px] uppercase">
                                {log.installationDate}
-                               <div className="text-[7px] text-gray-300 font-bold mt-1">Logged: {log.date}</div>
                             </td>
                          </tr>
                        )
                     })}
-                    {filteredLogs.length === 0 && (
-                      <tr>
-                        <td colSpan={5} className="px-8 py-20 text-center text-gray-300 font-black uppercase text-[10px] tracking-widest">
-                           <div className="flex flex-col items-center justify-center opacity-30">
-                              <svg className="w-12 h-12 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>
-                              No telemetry records match current filters.
-                           </div>
-                        </td>
-                      </tr>
-                    )}
                  </tbody>
                </table>
              </div>

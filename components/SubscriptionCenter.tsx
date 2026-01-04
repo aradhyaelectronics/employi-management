@@ -10,6 +10,9 @@ interface Props {
   removeUser?: (id: string) => Promise<void>;
 }
 
+// Razorpay Type Definition
+declare const Razorpay: any;
+
 const SubscriptionCenter: React.FC<Props> = ({ user, state, updatePlan, purchasePlan, removeUser }) => {
   const isSuper = user.role === UserRole.SUPER_ADMIN;
   const company = state.companies.find(c => c.id === user.companyId);
@@ -17,7 +20,7 @@ const SubscriptionCenter: React.FC<Props> = ({ user, state, updatePlan, purchase
   // States for Plan Architect
   const [editingPlan, setEditingPlan] = useState<SubscriptionPlan | null>(null);
   
-  // States for Direct Activation Hub (Refactored to Company-Centric)
+  // States for Direct Activation Hub
   const [targetCompanyId, setTargetCompanyId] = useState('');
   const [targetPlanId, setTargetPlanId] = useState('');
   const [targetMonths, setTargetMonths] = useState(1);
@@ -37,16 +40,39 @@ const SubscriptionCenter: React.FC<Props> = ({ user, state, updatePlan, purchase
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [state.users, userSearch]);
 
-  const handleSavePlan = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (editingPlan) {
-      updatePlan(editingPlan);
-      setEditingPlan(null);
+  const handlePurchase = (plan: SubscriptionPlan) => {
+    if (!window.hasOwnProperty('Razorpay')) {
+      return alert("Payment engine offline. Please ensure your device has internet access.");
     }
-  };
 
-  const handlePurchase = (planName: string) => {
-    alert(`PLAN ACTIVATION REQUIRED\n\nPlease contact our support team to activate the "${planName}" plan.\n\nCall: 7709384869`);
+    const options = {
+      key: "rzp_test_demo_key", // Dummy key for demo
+      amount: plan.price * 100, // Amount in paise
+      currency: "INR",
+      name: "Pragati Workforce Cloud",
+      description: `${plan.name} - ${plan.durationDays} Days License`,
+      image: "https://cdn-icons-png.flaticon.com/512/3063/3063822.png",
+      handler: function (response: any) {
+        // Payment success callback
+        purchasePlan(user.companyId, plan.id, 1);
+        alert(`PAYMENT SUCCESSFUL\n\nReference: ${response.razorpay_payment_id}\nYour enterprise has been upgraded to ${plan.name}.`);
+      },
+      prefill: {
+        name: user.name,
+        email: user.email,
+        contact: user.mobile || ""
+      },
+      notes: {
+        enterprise_id: user.companyId,
+        plan_id: plan.id
+      },
+      theme: {
+        color: "#0D47A1"
+      }
+    };
+
+    const rzp1 = new Razorpay(options);
+    rzp1.open();
   };
 
   const handleDirectActivation = async () => {
@@ -61,11 +87,9 @@ const SubscriptionCenter: React.FC<Props> = ({ user, state, updatePlan, purchase
     if (!selectedCompany || !selectedPlan) return;
 
     setIsActivating(true);
-    // Simulate cloud latency
     await new Promise(r => setTimeout(r, 1200));
     
     purchasePlan(selectedCompany.id, selectedPlan.id, targetMonths);
-    
     alert(`SUCCESS: Authorization Propagated\n\nEnterprise: ${selectedCompany.name}\nAuthorized Tier: ${selectedPlan.name}\nDuration: ${targetMonths} Months`);
     
     setTargetCompanyId('');
@@ -75,14 +99,9 @@ const SubscriptionCenter: React.FC<Props> = ({ user, state, updatePlan, purchase
 
   const handlePurgeAccount = async (u: User) => {
     if (u.id === user.id) return alert("SECURITY ALERT: Cannot purge active master session.");
-    
     const companyName = state.companies.find(c => c.id === u.companyId)?.name || 'System';
-    const confirmMsg = `PERMANENT PURGE: ${u.name}\n\nEnterprise: ${companyName}\n\nThis will erase all historical telemetry associated with this ID. Continue?`;
-    
-    if (confirm(confirmMsg)) {
-      if (removeUser) {
-        await removeUser(u.id);
-      }
+    if (confirm(`PERMANENT PURGE: ${u.name}\n\nEnterprise: ${companyName}\n\nThis will erase all historical telemetry associated with this ID. Continue?`)) {
+      if (removeUser) await removeUser(u.id);
     }
   };
 
@@ -92,7 +111,6 @@ const SubscriptionCenter: React.FC<Props> = ({ user, state, updatePlan, purchase
       {/* SUPER ADMIN MASTER CONSOLE */}
       {isSuper && (
         <>
-          {/* Section 1: Activation Hub (REFACORTERED FOR ENTERPRISES) */}
           <div className="bg-slate-950 rounded-[3rem] p-12 text-white shadow-2xl relative overflow-hidden border border-slate-800">
             <div className="absolute top-0 right-0 w-96 h-96 bg-blue-600/10 blur-[120px] rounded-full -mr-32 -mt-32"></div>
             <div className="relative z-10">
@@ -167,7 +185,6 @@ const SubscriptionCenter: React.FC<Props> = ({ user, state, updatePlan, purchase
             </div>
           </div>
 
-          {/* Section 2: Global Personnel Registry */}
           <div className="bg-white rounded-[3rem] shadow-sm border border-gray-100 overflow-hidden">
             <div className="p-10 border-b border-gray-50 bg-gray-50/50 flex flex-col md:flex-row justify-between items-center gap-6">
               <div>
@@ -250,14 +267,11 @@ const SubscriptionCenter: React.FC<Props> = ({ user, state, updatePlan, purchase
                 </tbody>
               </table>
             </div>
-            <div className="p-8 bg-slate-50 border-t border-gray-100 text-center">
-               <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.5em]">Global Audit Protocol Engaged</p>
-            </div>
           </div>
         </>
       )}
 
-      {/* STANDARD ADMIN UPGRADE PATHS - Unchanged visual logic */}
+      {/* STANDARD ADMIN UPGRADE PATHS */}
       {!isSuper && user.role === UserRole.ADMIN && (
         <div className="space-y-12">
           <div className="bg-gradient-to-br from-blue-900 via-indigo-900 to-slate-900 rounded-[3rem] p-12 text-white shadow-2xl relative overflow-hidden">
@@ -311,11 +325,15 @@ const SubscriptionCenter: React.FC<Props> = ({ user, state, updatePlan, purchase
                   </ul>
                   <button 
                     disabled={isActive}
-                    onClick={() => handlePurchase(plan.name)}
+                    onClick={() => handlePurchase(plan)}
                     className={`w-full py-5 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all ${isActive ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700 shadow-xl shadow-blue-100'}`}
                   >
                     {isActive ? 'Current Active Lease' : 'Initiate Upgrade'}
                   </button>
+                  <div className="mt-4 flex items-center justify-center space-x-2">
+                     <svg className="w-3 h-3 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" /></svg>
+                     <span className="text-[8px] font-black text-gray-400 uppercase tracking-[0.2em]">Secure Razorpay Integration</span>
+                  </div>
                 </div>
               );
             })}

@@ -1,21 +1,22 @@
 
 import React, { useState, useMemo } from 'react';
-import { User, AppState, UserRole } from '../types';
+import { User, AppState, UserRole, Task } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { GoogleGenAI } from "@google/genai";
-// Fixed: Added Logo to the imported components from constants
 import { ICONS, Logo } from '../constants';
 
 interface Props {
   user: User;
   state: AppState;
   updatePassword?: (id: string, password: string) => Promise<void>;
+  updateTaskStatus?: (id: string, status: 'TODO' | 'IN_PROGRESS' | 'DONE') => void;
   getAiSystemContext: (companyId?: string) => any;
 }
 
-const Dashboard: React.FC<Props> = ({ user, state, getAiSystemContext }) => {
+const Dashboard: React.FC<Props> = ({ user, state, getAiSystemContext, updateTaskStatus }) => {
   const isSuper = user.role === UserRole.SUPER_ADMIN;
   const isAdmin = user.role === UserRole.ADMIN;
+  const isSupervisor = user.role === UserRole.SUPERVISOR;
   const isEmployee = user.role === UserRole.EMPLOYEE;
   
   const [aiReport, setAiReport] = useState<{ text: string, sources?: any[] } | null>(null);
@@ -43,7 +44,7 @@ const Dashboard: React.FC<Props> = ({ user, state, getAiSystemContext }) => {
       ];
     }
 
-    if (isEmployee) {
+    if (isEmployee || isSupervisor) {
       const myWork = state.workLogs.filter(l => l.userId === user.id);
       const myEarnings = state.salarySlips.filter(s => s.userId === user.id).reduce((sum, s) => sum + s.totalAmount, 0);
       return [
@@ -55,7 +56,21 @@ const Dashboard: React.FC<Props> = ({ user, state, getAiSystemContext }) => {
     }
 
     return [];
-  }, [state, user, isSuper, isAdmin, isEmployee]);
+  }, [state, user, isSuper, isAdmin, isEmployee, isSupervisor]);
+
+  const myActiveTasks = useMemo(() => {
+    if (isSuper) return [];
+    return state.tasks.filter(t => t.assignedTo === user.id && t.status !== 'DONE');
+  }, [state.tasks, user.id, isSuper]);
+
+  const handleToggleTask = (task: Task) => {
+    if (updateTaskStatus) {
+      const statusCycle: ('TODO' | 'IN_PROGRESS' | 'DONE')[] = ['TODO', 'IN_PROGRESS', 'DONE'];
+      const currentIndex = statusCycle.indexOf(task.status as any);
+      const nextStatus = statusCycle[(currentIndex + 1) % statusCycle.length];
+      updateTaskStatus(task.id, nextStatus);
+    }
+  };
 
   const runAiIntelligenceAudit = async () => {
     setIsAiLoading(true);
@@ -116,6 +131,7 @@ const Dashboard: React.FC<Props> = ({ user, state, getAiSystemContext }) => {
               <h2 className="text-4xl font-black tracking-tighter mb-2">Hello, {user.name.split(' ')[0]}</h2>
               <p className="text-sm text-blue-100/70 font-bold max-w-xs leading-relaxed">
                 {isEmployee ? "Your production cycle is synchronized. Site geofencing active." : 
+                 isSupervisor ? "Your team telemetry is live. Coordinate field operations from Project Command." :
                  isAdmin ? "Enterprise cluster status: OPTIMAL. All field telemetry is live." : 
                  "System Root Access authorized. All multi-tenant isolation protocols are verified."}
               </p>
@@ -133,24 +149,54 @@ const Dashboard: React.FC<Props> = ({ user, state, getAiSystemContext }) => {
            </div>
         </div>
 
-        <div className="bg-white p-10 rounded-[2.5rem] shadow-sm border border-gray-100 flex flex-col justify-between">
-           <div>
-              <h3 className="text-xl font-black text-slate-800 uppercase tracking-tighter mb-2">Security Access</h3>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Master Cloud Sync Status</p>
-           </div>
-           
-           <div className="flex items-center space-x-6 my-8">
-              <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center relative">
-                 <div className="absolute inset-0 bg-blue-400 opacity-20 animate-ping rounded-2xl"></div>
-                 <svg className="w-8 h-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+        <div className="space-y-6">
+          {/* Quick Tasks / Milestones for Employees/Supervisors */}
+          {(isEmployee || isSupervisor) && myActiveTasks.length > 0 ? (
+            <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100 h-full flex flex-col">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-black text-slate-800 uppercase tracking-tighter">Priority Milestones</h3>
+                <span className="text-[10px] font-black text-orange-600 bg-orange-50 px-3 py-1 rounded-full">{myActiveTasks.length} Pending</span>
               </div>
+              <div className="flex-1 space-y-3 overflow-y-auto max-h-[220px] pr-2 custom-scrollbar">
+                {myActiveTasks.map(t => (
+                  <button 
+                    key={t.id} 
+                    onClick={() => handleToggleTask(t)}
+                    className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-white hover:shadow-md rounded-2xl border border-gray-100 transition-all text-left"
+                  >
+                    <div>
+                      <p className="text-xs font-black text-gray-800 uppercase tracking-tight">{t.name}</p>
+                      <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Project: {state.projects.find(p => p.id === t.projectId)?.name}</p>
+                    </div>
+                    <div className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase ${t.status === 'IN_PROGRESS' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-400'}`}>
+                      {t.status}
+                    </div>
+                  </button>
+                ))}
+              </div>
+              <p className="mt-4 text-[8px] font-black text-gray-300 text-center uppercase tracking-widest">Tap to update status</p>
+            </div>
+          ) : (
+            <div className="bg-white p-10 rounded-[2.5rem] shadow-sm border border-gray-100 flex flex-col justify-between h-full">
               <div>
-                 <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">TLS 1.3 Encryption</p>
-                 <p className="text-[8px] font-bold text-slate-400 uppercase mt-1 tracking-widest">End-to-End Tunnel Verified</p>
+                  <h3 className="text-xl font-black text-slate-800 uppercase tracking-tighter mb-2">Security Access</h3>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Master Cloud Sync Status</p>
               </div>
-           </div>
+              
+              <div className="flex items-center space-x-6 my-8">
+                  <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center relative">
+                    <div className="absolute inset-0 bg-blue-400 opacity-20 animate-ping rounded-2xl"></div>
+                    <svg className="w-8 h-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">TLS 1.3 Encryption</p>
+                    <p className="text-[8px] font-bold text-slate-400 uppercase mt-1 tracking-widest">End-to-End Tunnel Verified</p>
+                  </div>
+              </div>
 
-           <button onClick={() => alert("Administrative PIN Update Locked.")} className="w-full bg-slate-50 py-4 rounded-xl font-black text-[10px] uppercase tracking-widest text-slate-400 border border-slate-100">Update Terminal PIN</button>
+              <button onClick={() => alert("Administrative PIN Update Locked. Use Workforce panel.")} className="w-full bg-slate-50 py-4 rounded-xl font-black text-[10px] uppercase tracking-widest text-slate-400 border border-slate-100">Update Terminal PIN</button>
+            </div>
+          )}
         </div>
       </div>
 
