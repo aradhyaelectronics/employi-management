@@ -28,9 +28,17 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
     taskId: ''
   });
 
+  const isAdmin = user.role === UserRole.ADMIN || user.role === UserRole.SUPER_ADMIN;
+  const isSuper = user.role === UserRole.SUPER_ADMIN;
+
   const companySites = useMemo(() => state.sites.filter(s => s.companyId === user.companyId), [state.sites, user.companyId]);
   const companyEmployees = useMemo(() => state.users.filter(u => u.companyId === user.companyId), [state.users, user.companyId]);
   const companySupervisors = useMemo(() => state.users.filter(u => u.companyId === user.companyId && u.role === UserRole.SUPERVISOR), [state.users, user.companyId]);
+
+  // Find tasks assigned specifically to the user for milestone reporting
+  const relevantTasks = useMemo(() => {
+    return state.tasks.filter(t => t.assignedTo === user.id && t.status !== 'DONE');
+  }, [state.tasks, user.id]);
 
   // Auto-select site if only one exists in the registry
   useEffect(() => {
@@ -96,7 +104,7 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
       const isWorkTypeMatch = filterWorkType ? log.workType === filterWorkType : true;
       const isSiteMatch = filterSite ? log.siteId === filterSite : true;
       
-      // Supervisor Hierarchical Filter
+      // Supervisor Hierarchical Filter (Track logs of employees under a specific supervisor)
       const logUser = state.users.find(u => u.id === log.userId);
       const isSupervisorMatch = filterSupervisor ? logUser?.supervisorId === filterSupervisor : true;
 
@@ -160,6 +168,29 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              {/* TASK MILESTONE DROPDOWN */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-blue-600 uppercase tracking-widest ml-1">Assigned Task Milestone</label>
+                <select 
+                  className="w-full px-4 py-2.5 bg-blue-50 border border-blue-100 rounded-xl outline-none font-black text-blue-900 text-xs cursor-pointer focus:ring-2 focus:ring-blue-200 transition-all" 
+                  value={logData.taskId} 
+                  onChange={e => setLogData({ ...logData, taskId: e.target.value })}
+                >
+                  <option value="">General Work (No Task)</option>
+                  {relevantTasks.map(t => {
+                    const project = state.projects.find(p => p.id === t.projectId);
+                    return (
+                      <option key={t.id} value={t.id}>
+                        {project ? `[${project.name}] ` : ''}{t.name}
+                      </option>
+                    );
+                  })}
+                </select>
+                {relevantTasks.length === 0 && (
+                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">No pending tasks assigned.</p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -269,6 +300,25 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
                    </select>
                 </div>
 
+                {(isAdmin || isSuper) && (
+                   <>
+                     <div className="h-6 w-px bg-gray-200"></div>
+                     <div className="flex flex-col min-w-[140px]">
+                        <span className="text-[8px] font-black text-indigo-600 uppercase tracking-widest mb-1 flex items-center gap-1">
+                          <span className="w-1 h-1 bg-indigo-600 rounded-full"></span> Team Lead
+                        </span>
+                        <select 
+                          className="bg-transparent text-[10px] font-black uppercase outline-none text-slate-700 cursor-pointer hover:text-indigo-600 transition-colors" 
+                          value={filterSupervisor} 
+                          onChange={e => setFilterSupervisor(e.target.value)}
+                        >
+                           <option value="">All Supervisors</option>
+                           {companySupervisors.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                        </select>
+                     </div>
+                   </>
+                )}
+
                 {user.role !== UserRole.EMPLOYEE && (
                    <>
                      <div className="h-6 w-px bg-gray-200"></div>
@@ -302,6 +352,7 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
                     {filteredLogs.slice().sort((a,b) => b.installationDate.localeCompare(a.installationDate)).map((log) => {
                        const emp = state.users.find(u => u.id === log.userId);
                        const site = companySites.find(s => s.id === log.siteId);
+                       const task = state.tasks.find(t => t.id === log.taskId);
                        return (
                          <tr key={log.id} className="hover:bg-gray-50/50 transition-all group">
                             <td className="px-8 py-6">
@@ -313,6 +364,11 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
                             </td>
                             <td className="px-8 py-6">
                                <p className="text-xs font-black text-blue-900 uppercase">{log.workType}</p>
+                               {task && (
+                                 <p className="text-[7px] font-black text-blue-500 uppercase tracking-widest mt-0.5 bg-blue-50 w-fit px-1 rounded">
+                                   Milestone: {task.name}
+                                 </p>
+                               )}
                                <p className="text-[8px] font-bold text-gray-400 uppercase mt-0.5 line-clamp-1">{log.description}</p>
                             </td>
                             <td className="px-8 py-6">

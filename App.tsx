@@ -19,7 +19,7 @@ const App: React.FC = () => {
   const { 
     state, authenticate, resetSystem, addUser, updateUser, removeUser, 
     updateUserPin, updateUserPassword, addCompany, updateCompanyStatus, 
-    addSite, removeSite, markAttendance, updateAttendance, addWorkLog, 
+    addSite, removeSite, markAttendance, updateAttendance, removeAttendance, addWorkLog, 
     addFinancialRequest, updateRequestStatus, generateMonthlySlips, 
     addManualSalarySlip, updateSalaryStatus, removeCompany, purchaseSubscription,
     updateSubscriptionPlanConfig, getAiSystemContext
@@ -198,7 +198,7 @@ const App: React.FC = () => {
         <main className="p-4 md:p-10 flex-1 overflow-y-auto pb-32 md:pb-10 bg-slate-50/30">
           <div className="max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-2 duration-500">
              {activeTab === 'dashboard' && <Dashboard user={currentUser} state={state} getAiSystemContext={getAiSystemContext} updatePassword={updateUserPassword} />}
-             {activeTab === 'attendance' && <AttendancePanel user={currentUser} state={state} markAttendance={markAttendance} updateAttendance={updateAttendance} addSite={addSite} removeSite={removeSite} />}
+             {activeTab === 'attendance' && <AttendancePanel user={currentUser} state={state} markAttendance={markAttendance} updateAttendance={updateAttendance} removeAttendance={removeAttendance} addSite={addSite} removeSite={removeSite} />}
              {activeTab === 'work' && <WorkTracking user={currentUser} state={state} addWorkLog={addWorkLog} />}
              {activeTab === 'financials' && <FinancialManagement user={currentUser} state={state} addRequest={addFinancialRequest} updateStatus={updateRequestStatus} generateMonthlySlips={generateMonthlySlips} addManualSalarySlip={addManualSalarySlip} updateSalaryStatus={updateSalaryStatus} />}
              {activeTab === 'users' && <UserManagement user={currentUser} state={state} addUser={addUser} updateUser={updateUser} removeUser={removeUser} />}

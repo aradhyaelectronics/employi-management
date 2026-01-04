@@ -7,7 +7,7 @@ import {
 } from './types';
 
 const STORAGE_KEY = 'employeemanagement_cloud_v4';
-const CURRENT_VERSION = '4.7.0-ai-cloud';
+const CURRENT_VERSION = '4.7.6-payroll-loss-recovery';
 const STANDARD_SHIFT_HOURS = 8;
 
 const normalizeMobile = (num: string | undefined): string => {
@@ -175,6 +175,7 @@ export const useStore = () => {
     },
 
     updateAttendance: async (id: string, updates: Partial<Attendance>) => pushCloudUpdate(p => ({ ...p, attendance: p.attendance.map(a => a.id === id ? { ...a, ...updates } : a) })),
+    removeAttendance: async (id: string) => pushCloudUpdate(p => ({ ...p, attendance: p.attendance.filter(a => a.id !== id) }), `ATTENDANCE_REMOVED: ${id}`),
 
     generateMonthlySlips: async (cid: string, month: number, year: number) => {
       pushCloudUpdate(p => {
@@ -194,14 +195,18 @@ export const useStore = () => {
             }
           });
 
+          // Advances and Penalties (Damages)
           const adv = p.requests.filter(r => r.userId === u.id && r.type === 'ADVANCE' && r.status === RequestStatus.APPROVED && new Date(r.date).getMonth() === month).reduce((s, r) => s + r.amount, 0);
+          const penalties = p.requests.filter(r => r.userId === u.id && r.type === 'PENALTY' && new Date(r.date).getMonth() === month).reduce((s, r) => s + r.amount, 0);
+          
           const deductions = (u.pfAmount || 0) + (u.medicalAmount || 0);
 
           return {
             id: `slip-${u.id}-${month}-${year}`, userId: u.id, companyId: cid, month, year,
             baseAmount: Math.round(pay), overtimeAmount: Math.round(otPay), overtimeHours: totalOtHours,
-            advanceDeduction: adv, pfDeduction: u.pfEnabled ? (u.pfAmount || 0) : 0, medicalDeduction: u.medicalEnabled ? (u.medicalAmount || 0) : 0,
-            totalAmount: Math.round((pay + otPay) - adv - deductions),
+            advanceDeduction: adv, penaltyDeduction: penalties,
+            pfDeduction: u.pfEnabled ? (u.pfAmount || 0) : 0, medicalDeduction: u.medicalEnabled ? (u.medicalAmount || 0) : 0,
+            totalAmount: Math.round((pay + otPay) - adv - penalties - deductions),
             status: PaymentStatus.UNPAID, generatedDate: new Date().toISOString()
           };
         });

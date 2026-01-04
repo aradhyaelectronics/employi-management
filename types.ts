@@ -154,7 +154,7 @@ export interface FinancialRequest {
   userId: string;
   companyId: string;
   amount: number;
-  type: 'ADVANCE' | 'SALARY';
+  type: 'ADVANCE' | 'SALARY' | 'PENALTY';
   status: RequestStatus;
   date: string;
   description: string;
@@ -169,7 +169,8 @@ export interface MonthlySalarySlip {
   baseAmount: number;
   overtimeAmount: number;
   overtimeHours: number;
-  advanceDeduction: number; 
+  advanceDeduction: number;
+  penaltyDeduction: number; 
   pfDeduction: number;
   medicalDeduction: number;
   totalAmount: number; 
