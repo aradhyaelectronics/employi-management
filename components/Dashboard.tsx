@@ -8,9 +8,10 @@ interface Props {
   user: User;
   state: AppState;
   getAiSystemContext: (companyId?: string) => any;
+  onNavigate: (tabId: string) => void;
 }
 
-const Dashboard: React.FC<Props> = ({ user, state, getAiSystemContext }) => {
+const Dashboard: React.FC<Props> = ({ user, state, getAiSystemContext, onNavigate }) => {
   const isSuper = user.role === UserRole.SUPER_ADMIN;
   const company = state.companies.find(c => c.id === user.companyId);
 
@@ -66,23 +67,23 @@ const Dashboard: React.FC<Props> = ({ user, state, getAiSystemContext }) => {
          </div>
 
          {/* Extra Feature Card 1: Attendance */}
-         <button className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm flex flex-col items-center justify-center gap-4 group hover:shadow-xl transition-all active:scale-95">
+         <button onClick={() => onNavigate('attendance')} className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm flex flex-col items-center justify-center gap-4 group hover:shadow-xl transition-all active:scale-95">
             <div className="w-16 h-16 bg-orange-50 rounded-2xl flex items-center justify-center text-orange-600 group-hover:bg-orange-600 group-hover:text-white transition-all">
                <ICONS.Time className="w-8 h-8" />
             </div>
             <p className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Attendance Portal</p>
          </button>
 
-         {/* Extra Feature Card 2: Material Registry */}
-         <button className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm flex flex-col items-center justify-center gap-4 group hover:shadow-xl transition-all active:scale-95">
+         {/* Extra Feature Card 2: Material Registry - ACTIVE */}
+         <button onClick={() => onNavigate('materials')} className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm flex flex-col items-center justify-center gap-4 group hover:shadow-xl transition-all active:scale-95">
             <div className="w-16 h-16 bg-green-50 rounded-2xl flex items-center justify-center text-green-600 group-hover:bg-green-600 group-hover:text-white transition-all">
                <ICONS.Shield className="w-8 h-8" />
             </div>
             <p className="text-[10px] font-black text-slate-800 uppercase tracking-widest text-center">Material Registry</p>
          </button>
 
-         {/* NEW Extra Card 3: Node Telemetry Scan */}
-         <button className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm flex flex-col items-center justify-center gap-4 group hover:shadow-xl transition-all active:scale-95">
+         {/* NEW Extra Card 3: Node Telemetry Scan - ACTIVE */}
+         <button onClick={() => onNavigate('telemetry')} className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm flex flex-col items-center justify-center gap-4 group hover:shadow-xl transition-all active:scale-95">
             <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-all">
                <ICONS.Rocket className="w-8 h-8" />
             </div>
@@ -90,7 +91,7 @@ const Dashboard: React.FC<Props> = ({ user, state, getAiSystemContext }) => {
          </button>
 
          {/* NEW Extra Card 4: Resource Planner */}
-         <button className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm flex flex-col items-center justify-center gap-4 group hover:shadow-xl transition-all active:scale-95">
+         <button onClick={() => onNavigate('projects')} className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm flex flex-col items-center justify-center gap-4 group hover:shadow-xl transition-all active:scale-95">
             <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-600 group-hover:bg-slate-900 group-hover:text-white transition-all">
                <ICONS.Work className="w-8 h-8" />
             </div>

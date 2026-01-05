@@ -160,7 +160,6 @@ const UserManagement: React.FC<Props> = ({ user, state, addUser, updateUser, rem
                    <span className="text-xs font-black">{currentUsersCount} / {plan?.userLimit} Used</span>
                 </div>
              </div>
-             {/* Fix: Access AndroidInterface by casting window to any to avoid TypeScript errors */}
              <button onClick={() => (window as any).AndroidInterface?.showToast("Download APK Link Copied")} className="relative z-10 px-6 py-3 bg-blue-600 rounded-xl text-[9px] font-black uppercase tracking-widest shadow-xl">Deploy Employee APK</button>
           </div>
        )}
@@ -221,6 +220,33 @@ const UserManagement: React.FC<Props> = ({ user, state, addUser, updateUser, rem
                     <input type="email" placeholder="Email ID" className="w-full px-4 py-3 bg-gray-50 rounded-xl border text-sm font-medium outline-none" value={newUser.email} onChange={e => setNewUser({ ...newUser, email: e.target.value })} required />
                     <input type="tel" placeholder="Mobile Number" className={`w-full px-4 py-3 bg-gray-50 rounded-xl border text-sm font-medium outline-none ${mobileConflict ? 'border-red-300 bg-red-50' : ''}`} value={newUser.mobile} onChange={e => setNewUser({ ...newUser, mobile: e.target.value })} required />
                   </div>
+                  
+                  {/* Salary Configuration Fields */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-black text-blue-600 uppercase ml-1">Salary Type</label>
+                      <select 
+                        className="w-full px-4 py-3 bg-blue-50 border-blue-100 text-blue-900 rounded-xl border text-xs font-black uppercase" 
+                        value={newUser.salaryType} 
+                        onChange={e => setNewUser({ ...newUser, salaryType: e.target.value as SalaryType })}
+                      >
+                        <option value={SalaryType.MONTHLY_FIXED}>Monthly Fixed</option>
+                        <option value={SalaryType.DAILY_WAGE}>Daily Wage</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-black text-blue-600 uppercase ml-1">Salary Amount (₹)</label>
+                      <input 
+                        type="number" 
+                        placeholder="Amount" 
+                        className="w-full px-4 py-3 bg-blue-50 border-blue-100 text-blue-900 rounded-xl border text-sm font-black" 
+                        value={newUser.salaryAmount || ''} 
+                        onChange={e => setNewUser({ ...newUser, salaryAmount: parseInt(e.target.value) || 0 })} 
+                        required 
+                      />
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="text-[9px] font-black text-blue-600 uppercase mb-1 ml-1">Initial Password</label>
@@ -315,7 +341,7 @@ const UserManagement: React.FC<Props> = ({ user, state, addUser, updateUser, rem
 
       {newPinRequest && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in">
-           <div className="bg-white rounded-[2.5rem] p-10 w-full max-w-sm text-center shadow-2xl">
+           <div className="bg-white rounded-[2.5rem] p-10 w-full max-sm text-center shadow-2xl">
               <h4 className="text-xl font-black text-blue-900 uppercase tracking-tighter mb-4">Reset Terminal PIN</h4>
               <input type="password" maxLength={6} className="w-full text-center text-4xl font-black tracking-[0.5em] bg-slate-50 rounded-2xl py-6 mb-8" placeholder="******" value={newPinRequest.pin} onChange={e => setNewPinRequest({...newPinRequest, pin: e.target.value.replace(/\D/g, '')})} />
               <div className="flex space-x-3">
@@ -335,6 +361,31 @@ const UserManagement: React.FC<Props> = ({ user, state, addUser, updateUser, rem
                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Personnel Name</label>
                    <input type="text" className="w-full px-4 py-3 bg-gray-50 border rounded-xl font-bold text-sm" value={editingUser.name} onChange={e => setEditingUser({...editingUser, name: e.target.value})} required />
                 </div>
+                
+                {/* Editing Salary Configuration */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Salary Type</label>
+                    <select 
+                      className="w-full px-4 py-3 bg-gray-50 border rounded-xl font-bold text-xs uppercase" 
+                      value={editingUser.salaryType} 
+                      onChange={e => setEditingUser({...editingUser, salaryType: e.target.value as SalaryType})}
+                    >
+                      <option value={SalaryType.MONTHLY_FIXED}>Monthly Fixed</option>
+                      <option value={SalaryType.DAILY_WAGE}>Daily Wage</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Salary Amount (₹)</label>
+                    <input 
+                      type="number" 
+                      className="w-full px-4 py-3 bg-gray-50 border rounded-xl font-bold text-sm" 
+                      value={editingUser.salaryAmount || ''} 
+                      onChange={e => setEditingUser({...editingUser, salaryAmount: parseInt(e.target.value) || 0})} 
+                    />
+                  </div>
+                </div>
+
                 <div className="space-y-2">
                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Access Status</label>
                    <select className="w-full px-4 py-3 bg-blue-50 border border-blue-100 text-blue-900 rounded-xl font-black text-xs" value={editingUser.status} onChange={e => setEditingUser({...editingUser, status: e.target.value as UserStatus})}>

@@ -12,6 +12,7 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [siteFilter, setSiteFilter] = useState('');
   
   const isAdmin = user.role === UserRole.ADMIN || user.role === UserRole.SUPER_ADMIN;
   const isSupervisor = user.role === UserRole.SUPERVISOR;
@@ -71,10 +72,11 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
       const isAfterStart = startDate ? activityDate >= startDate : true;
       const isBeforeEnd = endDate ? activityDate <= endDate : true;
       const isSearchMatch = searchQuery ? log.description.toLowerCase().includes(searchQuery.toLowerCase()) : true;
+      const isSiteMatch = siteFilter ? log.siteId === siteFilter : true;
 
-      return isAfterStart && isBeforeEnd && isSearchMatch;
+      return isAfterStart && isBeforeEnd && isSearchMatch && isSiteMatch;
     });
-  }, [state.workLogs, user, startDate, endDate, searchQuery]);
+  }, [state.workLogs, user, startDate, endDate, searchQuery, siteFilter]);
 
   return (
     <div className="space-y-6">
@@ -120,9 +122,19 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
 
         <div className="lg:col-span-3 space-y-6">
            <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden">
-             <div className="p-8 border-b bg-gray-50/50 flex justify-between items-center">
+             <div className="p-8 border-b bg-gray-50/50 flex flex-wrap gap-4 justify-between items-center">
                 <h3 className="text-xl font-black text-blue-900 uppercase tracking-tighter">Field Telemetry</h3>
-                <input type="text" placeholder="Search logs..." className="px-4 py-2 bg-white border rounded-xl text-xs font-bold outline-none" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                <div className="flex flex-wrap gap-3">
+                  <select 
+                    className="px-4 py-2 bg-white border rounded-xl text-[10px] font-black uppercase outline-none focus:border-blue-500"
+                    value={siteFilter}
+                    onChange={e => setSiteFilter(e.target.value)}
+                  >
+                    <option value="">All Project Sites</option>
+                    {companySites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                  <input type="text" placeholder="Search logs..." className="px-4 py-2 bg-white border rounded-xl text-xs font-bold outline-none" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                </div>
              </div>
              <div className="overflow-x-auto">
                <table className="w-full text-left">

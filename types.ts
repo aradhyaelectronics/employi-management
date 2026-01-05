@@ -99,7 +99,7 @@ export interface Company {
   status: UserStatus; 
   subscriptionPlanId?: string;
   subscriptionExpiry?: string;
-  customWorkTypes: string[]; // NEW: Per-enterprise work classifications
+  customWorkTypes: string[];
 }
 
 export interface Site {
@@ -139,6 +139,16 @@ export interface WorkLog {
   description: string;
 }
 
+export interface Material {
+  id: string;
+  companyId: string;
+  name: string;
+  unit: string;
+  totalStock: number;
+  allocated: number;
+  lastUpdated: string;
+}
+
 export interface FinancialRequest {
   id: string;
   userId: string;
@@ -175,8 +185,8 @@ export interface SubscriptionPlan {
   durationDays: number;
   userLimit: number;
   features: string[];
-  offersEnabled: boolean; // NEW: Field to toggle offers for a specific plan
-  updatedAt?: string; // Track when the plan was last modified
+  offersEnabled: boolean;
+  updatedAt?: string;
 }
 
 export interface IntegrationConfig {
@@ -230,6 +240,7 @@ export interface AppState {
   leaves: LeaveRequest[];
   attendance: Attendance[];
   workLogs: WorkLog[];
+  materials: Material[];
   requests: FinancialRequest[];
   subscriptionPlans: SubscriptionPlan[];
   offers: Offer[];

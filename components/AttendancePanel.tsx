@@ -31,6 +31,22 @@ const AttendancePanel: React.FC<Props> = ({ user, state, markAttendance, addSite
   const [distanceToSite, setDistanceToSite] = useState<number | null>(null);
   const [liveTimer, setLiveTimer] = useState('00:00:00');
 
+  // Request location permission on mount
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const c = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          setCoords(c);
+        },
+        (err) => {
+          console.debug("Location permission denied or error:", err);
+        },
+        { enableHighAccuracy: false, timeout: 5000 }
+      );
+    }
+  }, []);
+
   // Manual Entry State (For Leaders)
   const [manualForm, setManualForm] = useState({
     userId: '',
