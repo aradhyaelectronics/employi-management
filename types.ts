@@ -43,16 +43,6 @@ export interface ServerEvent {
   source: string;
 }
 
-export enum WorkType {
-  CABLE_LAYING = 'Cable Laying',
-  SPLICING = 'Splicing/Jointing',
-  CIVIL_WORK = 'Civil/Trenching',
-  INSTALLATION = 'Equipment Install',
-  TESTING = 'Testing/Comms',
-  MAINTENANCE = 'Maintenance',
-  OTHER = 'Other'
-}
-
 export interface Project {
   id: string;
   companyId: string;
@@ -66,7 +56,7 @@ export interface Project {
 export interface Task {
   id: string;
   projectId: string;
-  assignedTo: string; // userId
+  assignedTo: string; 
   name: string;
   status: 'TODO' | 'IN_PROGRESS' | 'DONE';
 }
@@ -87,22 +77,18 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  mobile: string; // TEXT UNIQUE NOT NULL
+  mobile: string; 
   role: UserRole;
-  status: UserStatus; // DEFAULT 'active'
+  status: UserStatus; 
   companyId: string;
-  company_name?: string; // Aligned with D1 Final
-  address?: string; // Aligned with D1 Final
+  company_name?: string; 
+  address?: string; 
   password?: string;
-  pin_hash: string; // TEXT NOT NULL (SHA-256)
+  pin_hash: string; 
   supervisorId?: string;
   salaryType?: SalaryType;
   salaryAmount?: number;
   overtimeRate?: number;
-  pfEnabled?: boolean;
-  pfAmount?: number;
-  medicalEnabled?: boolean;
-  medicalAmount?: number;
 }
 
 export interface Company {
@@ -113,6 +99,7 @@ export interface Company {
   status: UserStatus; 
   subscriptionPlanId?: string;
   subscriptionExpiry?: string;
+  customWorkTypes: string[]; // NEW: Per-enterprise work classifications
 }
 
 export interface Site {
@@ -125,16 +112,16 @@ export interface Site {
 }
 
 export interface Attendance {
-  id: string; // INTEGER PRIMARY KEY AUTOINCREMENT
-  userId: string; // user_id INTEGER
+  id: string;
+  userId: string;
   companyId: string;
   siteId?: string; 
-  date: string; // date TEXT
-  checkIn: string; // check_in TEXT
-  checkOut?: string; // check_out TEXT
-  latitude?: number; // latitude REAL
-  longitude?: number; // longitude REAL
-  isActive: number; // is_active INTEGER DEFAULT 1 (1 = checked in, 0 = checked out)
+  date: string;
+  checkIn: string;
+  checkOut?: string;
+  latitude?: number;
+  longitude?: number;
+  isActive: number;
   overtimeHours?: number;
 }
 
@@ -188,6 +175,8 @@ export interface SubscriptionPlan {
   durationDays: number;
   userLimit: number;
   features: string[];
+  offersEnabled: boolean; // NEW: Field to toggle offers for a specific plan
+  updatedAt?: string; // Track when the plan was last modified
 }
 
 export interface IntegrationConfig {
@@ -208,11 +197,28 @@ export interface Invoice {
   status: 'SUCCESS' | 'REFUNDED';
 }
 
-export interface OtpRecord {
-  id: string; 
-  mobile: string; 
-  otp: string; 
-  expires_at: number; 
+export interface Offer {
+  id: string;
+  name: string;
+  code: string;
+  discountPercent: number;
+  active: boolean;
+}
+
+export interface Advertisement {
+  id: string;
+  imageUrl: string;
+  link: string;
+  active: boolean;
+  position: 'DASHBOARD_BANNER' | 'POPUP';
+}
+
+export interface Announcement {
+  id: string;
+  title: string;
+  message: string;
+  active: boolean;
+  timestamp: string;
 }
 
 export interface AppState {
@@ -226,11 +232,14 @@ export interface AppState {
   workLogs: WorkLog[];
   requests: FinancialRequest[];
   subscriptionPlans: SubscriptionPlan[];
+  offers: Offer[];
+  ads: Advertisement[];
+  announcement?: Announcement;
   salarySlips: MonthlySalarySlip[];
   systemLogs: ServerEvent[];
   integrations: IntegrationConfig;
   invoices: Invoice[];
-  otps: OtpRecord[];
+  otps: any[];
   apkUrl: string;
   version: string;
 }

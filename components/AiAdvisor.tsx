@@ -14,7 +14,8 @@ const AiAdvisor: React.FC<Props> = ({ context }) => {
   const generateInsight = async () => {
     setLoading(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: (process.env as any).API_KEY });
+      /* Fix: Initialize GoogleGenAI with process.env.API_KEY directly as required by the library guidelines */
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const prompt = `
         Analyze these field operations telemetry for "Pragati Cloud Workforce Management".
         System Snapshot:
@@ -35,6 +36,7 @@ const AiAdvisor: React.FC<Props> = ({ context }) => {
         contents: prompt,
       });
 
+      /* Fix: Use .text property directly instead of text() method as per extraction guidelines */
       setInsight(response.text || "Unable to parse operational telemetry at this time.");
     } catch (err) {
       console.error(err);

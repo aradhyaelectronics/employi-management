@@ -1,6 +1,6 @@
 {
-  "name": "Pragati Cloud Workforce",
-  "description": "Enterprise Field Management & Cable Telemetry APK",
+  "name": "Pragati Workforce Master",
+  "description": "Enterprise Field Management & Cable Telemetry Production Node",
   "requestFramePermissions": [
     "geolocation",
     "camera"

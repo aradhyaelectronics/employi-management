@@ -59,7 +59,7 @@ const SalarySlipModal: React.FC<Props> = ({ slips, state, onClose }) => {
                     <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest max-w-xs">{company?.address || 'Operational Sector - Infrastructure Node'}</p>
                     <div className="mt-4 flex flex-col space-y-0.5">
                        <p className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Contact: {admin?.mobile || '7709384869'}</p>
-                       <p className="text-[10px] font-black text-slate-900 uppercase tracking-widest lowercase">Email: {admin?.email || 'support@pragati.com'}</p>
+                       <p className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Email: pragatienterprises569@gmail.com</p>
                     </div>
                   </div>
                   <div className="text-right">

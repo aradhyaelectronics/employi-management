@@ -14,17 +14,16 @@ interface Props {
 
 const UserManagement: React.FC<Props> = ({ user, state, addUser, updateUser, removeUser, onUpgradeClick }) => {
   const isSupervisor = user.role === UserRole.SUPERVISOR;
-  const isAdmin = user.role === UserRole.ADMIN;
+  const isAdmin = user.role === UserRole.ADMIN || user.role === UserRole.SUPER_ADMIN;
   const isSuper = user.role === UserRole.SUPER_ADMIN;
 
-  const [copied, setCopied] = useState(false);
   const [newPinRequest, setNewPinRequest] = useState<{ id: string, pin: string } | null>(null);
 
   // Subscription Details
   const company = state.companies.find(c => c.id === user.companyId);
   const plan = state.subscriptionPlans.find(p => p.id === (company?.subscriptionPlanId || 'p-free'));
-  const currentUsers = state.users.filter(u => u.companyId === user.companyId).length;
-  const isLimitReached = plan ? currentUsers >= plan.userLimit : false;
+  const currentUsersCount = state.users.filter(u => u.companyId === user.companyId).length;
+  const isLimitReached = plan ? currentUsersCount >= plan.userLimit : false;
 
   const calculateOtRate = (amount: number, type: SalaryType): number => {
     if (amount <= 0) return 0;
@@ -53,11 +52,20 @@ const UserManagement: React.FC<Props> = ({ user, state, addUser, updateUser, rem
 
   const companySupervisors = useMemo(() => companyUsers.filter(u => u.role === UserRole.SUPERVISOR), [companyUsers]);
 
-  const visibleEmployees = useMemo(() => {
-    if (isSuper || isAdmin) return companyUsers;
-    if (isSupervisor) return companyUsers.filter(u => u.supervisorId === user.id);
-    return [];
+  // CORE REGISTRY: Filtered to show only ACTIVE users as per requirement
+  const activeRegistry = useMemo(() => {
+    let base = [];
+    if (isSuper || isAdmin) base = companyUsers;
+    else if (isSupervisor) base = companyUsers.filter(u => u.supervisorId === user.id);
+    
+    return base.filter(u => u.status === UserStatus.ACTIVE);
   }, [companyUsers, user.id, isAdmin, isSupervisor, isSuper]);
+
+  // VERIFICATION QUEUE: For admins to approve new enrollments
+  const pendingQueue = useMemo(() => {
+    if (!isAdmin) return [];
+    return companyUsers.filter(u => u.status === UserStatus.PENDING);
+  }, [companyUsers, isAdmin]);
 
   const mobileConflict = useMemo(() => {
     const clean = newUser.mobile.replace(/\D/g, '');
@@ -101,7 +109,7 @@ const UserManagement: React.FC<Props> = ({ user, state, addUser, updateUser, rem
         pin: Math.floor(100000 + Math.random() * 900000).toString(),
         pfEnabled: false, pfAmount: 0, medicalEnabled: false, medicalAmount: 0
       });
-      alert("Success: Personnel enrolled as PENDING.");
+      alert("Success: Personnel enrolled as PENDING. Approval required.");
     } catch (error: any) { 
       if (error.message.includes("LIMIT REACHED") && confirm(error.message + "\n\nUpgrade now?")) {
         onUpgradeClick?.();
@@ -130,10 +138,10 @@ const UserManagement: React.FC<Props> = ({ user, state, addUser, updateUser, rem
     } catch (err: any) { alert(err.message); }
   };
 
-  const handleQuickActivate = async (u: User) => {
-    if (confirm(`Activate ${u.name}?`)) {
+  const handleActivate = async (u: User) => {
+    if (confirm(`Authorize and activate ${u.name} into the active registry?`)) {
       await updateUser(u.id, { status: UserStatus.ACTIVE });
-      alert("Personnel activated.");
+      alert("Personnel activated and synchronized.");
     }
   };
 
@@ -147,12 +155,46 @@ const UserManagement: React.FC<Props> = ({ user, state, addUser, updateUser, rem
                 <h3 className="text-xl font-black uppercase tracking-tighter">Capacity Index</h3>
                 <div className="flex items-center space-x-4 mt-4">
                    <div className="w-48 h-2 bg-slate-800 rounded-full overflow-hidden">
-                      <div className={`h-full transition-all ${isLimitReached ? 'bg-red-500' : 'bg-blue-600'}`} style={{ width: `${(currentUsers / (plan?.userLimit || 1)) * 100}%` }}></div>
+                      <div className={`h-full transition-all ${isLimitReached ? 'bg-red-500' : 'bg-blue-600'}`} style={{ width: `${(currentUsersCount / (plan?.userLimit || 1)) * 100}%` }}></div>
                    </div>
-                   <span className="text-xs font-black">{currentUsers} / {plan?.userLimit} Used</span>
+                   <span className="text-xs font-black">{currentUsersCount} / {plan?.userLimit} Used</span>
                 </div>
              </div>
-             <button onClick={() => window.AndroidInterface?.showToast("Download APK Link Copied")} className="relative z-10 px-6 py-3 bg-blue-600 rounded-xl text-[9px] font-black uppercase tracking-widest shadow-xl">Deploy Employee APK</button>
+             {/* Fix: Access AndroidInterface by casting window to any to avoid TypeScript errors */}
+             <button onClick={() => (window as any).AndroidInterface?.showToast("Download APK Link Copied")} className="relative z-10 px-6 py-3 bg-blue-600 rounded-xl text-[9px] font-black uppercase tracking-widest shadow-xl">Deploy Employee APK</button>
+          </div>
+       )}
+
+       {/* Verification Queue Section for Admins */}
+       {isAdmin && pendingQueue.length > 0 && (
+          <div className="bg-white rounded-3xl border border-orange-100 overflow-hidden shadow-sm animate-in slide-in-from-top-4">
+             <div className="p-6 border-b border-orange-50 bg-orange-50/20 flex justify-between items-center">
+                <div className="flex items-center space-x-2">
+                   <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></div>
+                   <h4 className="text-sm font-black text-orange-900 uppercase tracking-widest">Verification Queue</h4>
+                </div>
+                <span className="text-[10px] font-black text-orange-600 uppercase tracking-widest">{pendingQueue.length} Awaiting Approval</span>
+             </div>
+             <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                   <tbody className="divide-y divide-orange-50">
+                      {pendingQueue.map(u => (
+                         <tr key={u.id} className="hover:bg-orange-50/30 transition-all">
+                            <td className="px-8 py-5">
+                               <p className="text-sm font-black text-slate-800 uppercase">{u.name}</p>
+                               <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{u.mobile} • {u.role}</p>
+                            </td>
+                            <td className="px-8 py-5 text-right">
+                               <div className="flex items-center justify-end space-x-3">
+                                  <button onClick={() => handleActivate(u)} className="px-4 py-2 bg-green-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-lg shadow-green-900/10 hover:bg-green-700 transition-all">Approve</button>
+                                  <button onClick={() => confirm("Reject enrollment?") && removeUser(u.id)} className="px-4 py-2 bg-red-50 text-red-600 rounded-xl text-[9px] font-black uppercase tracking-widest">Reject</button>
+                               </div>
+                            </td>
+                         </tr>
+                      ))}
+                   </tbody>
+                </table>
+             </div>
           </div>
        )}
 
@@ -219,18 +261,19 @@ const UserManagement: React.FC<Props> = ({ user, state, addUser, updateUser, rem
           <div className={(isAdmin || isSuper) ? "lg:col-span-2" : "lg:col-span-3"}>
             <div className="bg-white rounded-3xl border border-gray-100 overflow-hidden shadow-sm">
               <div className="p-6 border-b bg-gray-50/50 flex justify-between items-center">
-                <h4 className="text-sm font-black text-gray-800 uppercase tracking-widest">Personnel Registry</h4>
+                <h4 className="text-sm font-black text-gray-800 uppercase tracking-widest">Active Registry</h4>
+                <span className="text-[9px] font-black text-blue-600 uppercase tracking-widest">{activeRegistry.length} Verified Nodes</span>
               </div>
               <table className="w-full text-left">
                 <thead>
                   <tr className="bg-gray-50">
                     <th className="px-8 py-4 text-[10px] font-bold uppercase text-gray-400">Personnel</th>
-                    <th className="px-8 py-4 text-[10px] font-bold uppercase text-center text-gray-400">Verification</th>
+                    <th className="px-8 py-4 text-[10px] font-bold uppercase text-center text-gray-400">Node Lock</th>
                     <th className="px-8 py-4 text-[10px] font-bold uppercase text-right text-gray-400">Manage</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {visibleEmployees.map((u) => (
+                  {activeRegistry.map((u) => (
                     <tr key={u.id} className="hover:bg-gray-50/30 transition-colors">
                       <td className="px-8 py-6">
                         <div className="font-bold text-gray-800 text-sm uppercase tracking-tight">{u.name}</div>
@@ -239,19 +282,17 @@ const UserManagement: React.FC<Props> = ({ user, state, addUser, updateUser, rem
                       </td>
                       <td className="px-8 py-6 text-center">
                         <div className="flex flex-col items-center gap-2">
-                          <span className={`px-3 py-1 rounded-xl text-[8px] font-black uppercase border ${u.status === UserStatus.ACTIVE ? 'bg-green-50 text-green-700 border-green-100' : u.status === UserStatus.PENDING ? 'bg-orange-50 text-orange-600 border-orange-100' : 'bg-red-50 text-red-600 border-red-100'}`}>
-                            {u.status}
+                          <span className="px-3 py-1 rounded-xl text-[8px] font-black uppercase border bg-green-50 text-green-700 border-green-100 flex items-center gap-1">
+                             <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
+                             {u.status}
                           </span>
-                          {(isAdmin || isSuper) && u.status === UserStatus.PENDING && (
-                            <button onClick={() => handleQuickActivate(u)} className="text-[7px] font-black text-green-600 uppercase border border-green-200 px-2 py-1 rounded-lg">Approve & Activate</button>
-                          )}
                         </div>
                       </td>
                       <td className="px-8 py-6 text-right">
                         <div className="flex items-center justify-end space-x-3">
                           <button onClick={() => setEditingUser(u)} className="text-blue-600 font-black text-[10px] uppercase">Edit</button>
                           {(isSuper || isAdmin) && u.id !== user.id && (
-                            <button onClick={() => confirm("Delete personnel?") && removeUser(u.id)} className="p-2 text-gray-300 hover:text-red-500">
+                            <button onClick={() => confirm("Decommission this personnel node? This will block access immediately.") && removeUser(u.id)} className="p-2 text-gray-300 hover:text-red-500 transition-all">
                               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                             </button>
                           )}
@@ -259,6 +300,13 @@ const UserManagement: React.FC<Props> = ({ user, state, addUser, updateUser, rem
                       </td>
                     </tr>
                   ))}
+                  {activeRegistry.length === 0 && (
+                    <tr>
+                      <td colSpan={3} className="px-8 py-20 text-center text-gray-300 font-black text-[10px] uppercase tracking-[0.4em]">
+                        No Active Personnel in Registry
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -283,14 +331,20 @@ const UserManagement: React.FC<Props> = ({ user, state, addUser, updateUser, rem
           <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-xl p-10 relative">
             <h3 className="text-2xl font-black text-blue-900 uppercase mb-8">Update Profile</h3>
             <form onSubmit={handleUpdateUser} className="space-y-6">
-                <input type="text" className="w-full px-4 py-3 bg-gray-50 border rounded-xl font-bold text-sm" value={editingUser.name} onChange={e => setEditingUser({...editingUser, name: e.target.value})} required />
-                <select className="w-full px-4 py-3 bg-blue-50 border border-blue-100 text-blue-900 rounded-xl font-black text-xs" value={editingUser.status} onChange={e => setEditingUser({...editingUser, status: e.target.value as UserStatus})}>
-                    <option value={UserStatus.ACTIVE}>ACTIVE</option>
-                    <option value={UserStatus.PENDING}>PENDING</option>
-                    <option value={UserStatus.BLOCKED}>BLOCKED</option>
-                </select>
+                <div className="space-y-2">
+                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Personnel Name</label>
+                   <input type="text" className="w-full px-4 py-3 bg-gray-50 border rounded-xl font-bold text-sm" value={editingUser.name} onChange={e => setEditingUser({...editingUser, name: e.target.value})} required />
+                </div>
+                <div className="space-y-2">
+                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Access Status</label>
+                   <select className="w-full px-4 py-3 bg-blue-50 border border-blue-100 text-blue-900 rounded-xl font-black text-xs" value={editingUser.status} onChange={e => setEditingUser({...editingUser, status: e.target.value as UserStatus})}>
+                       <option value={UserStatus.ACTIVE}>ACTIVE</option>
+                       <option value={UserStatus.PENDING}>PENDING</option>
+                       <option value={UserStatus.BLOCKED}>BLOCKED</option>
+                   </select>
+                </div>
                <div className="flex space-x-3 pt-6">
-                  <button type="submit" className="flex-1 bg-blue-600 text-white py-4 rounded-xl font-black uppercase text-[11px] tracking-widest">Save</button>
+                  <button type="submit" className="flex-1 bg-blue-600 text-white py-4 rounded-xl font-black uppercase text-[11px] tracking-widest shadow-xl">Save Changes</button>
                   <button type="button" onClick={() => setEditingUser(null)} className="px-6 py-4 bg-gray-100 text-gray-400 rounded-xl font-black uppercase text-[11px] tracking-widest">Cancel</button>
                </div>
             </form>
