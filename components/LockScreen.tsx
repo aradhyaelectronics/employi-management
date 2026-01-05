@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { User } from '../types';
 import { Logo } from '../constants';
+import { hashPIN } from '../store';
 
 interface Props {
   user: User;
@@ -11,20 +12,27 @@ interface Props {
 
 const LockScreen: React.FC<Props> = ({ user, onUnlock, onLogout }) => {
   const [pin, setPin] = useState('');
+  const [isVerifying, setIsVerifying] = useState(false);
   const [error, setError] = useState(false);
 
-  const handleInput = (val: string) => {
-    if (pin.length < 4) {
+  const handleInput = async (val: string) => {
+    if (pin.length < 6 && !isVerifying) {
       const newPin = pin + val;
       setPin(newPin);
-      if (newPin.length === 4) {
-        if (newPin === user.pin) {
+      
+      if (newPin.length === 6) {
+        setIsVerifying(true);
+        const hashed = await hashPIN(newPin);
+        
+        // Strictly comparing hashed input with pin_hash from user identity
+        if (hashed === user.pin_hash) {
           onUnlock();
         } else {
           setError(true);
           setTimeout(() => {
             setPin('');
             setError(false);
+            setIsVerifying(false);
           }, 800);
         }
       }
@@ -32,27 +40,27 @@ const LockScreen: React.FC<Props> = ({ user, onUnlock, onLogout }) => {
   };
 
   const handleBackspace = () => {
-    setPin(pin.slice(0, -1));
+    if (!isVerifying) setPin(pin.slice(0, -1));
   };
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-[#0D47A1]/80 backdrop-blur-2xl flex items-center justify-center p-6 select-none animate-in fade-in duration-500">
+    <div className="fixed inset-0 z-[9999] bg-[#0D47A1] backdrop-blur-2xl flex items-center justify-center p-6 select-none animate-in fade-in duration-500">
       <div className="w-full max-w-sm text-center">
         <Logo iconClassName="w-24 h-20 mx-auto opacity-80" showText={false} light={true} />
         
         <div className="mt-8 mb-12">
-          <h2 className="text-2xl font-black text-white uppercase tracking-tighter">Security Locked</h2>
-          <p className="text-blue-200 text-[10px] font-black uppercase tracking-[0.3em] mt-2">Enter your 4-digit PIN to access Pragati Cloud</p>
+          <h2 className="text-2xl font-black text-white uppercase tracking-tighter">Secure Terminal</h2>
+          <p className="text-blue-200 text-[10px] font-black uppercase tracking-[0.3em] mt-2">6-Digit PIN Required</p>
         </div>
 
-        <div className="flex justify-center gap-4 mb-16">
-          {[0, 1, 2, 3].map(i => (
+        <div className="flex justify-center gap-3 mb-16">
+          {[0, 1, 2, 3, 4, 5].map(i => (
             <div 
               key={i} 
               className={`w-4 h-4 rounded-full border-2 transition-all duration-300 ${
                 error ? 'bg-red-500 border-red-500 scale-125' :
                 pin.length > i ? 'bg-orange-500 border-orange-500 scale-110' : 'border-white/30'
-              }`}
+              } ${isVerifying && pin.length > i ? 'animate-pulse' : ''}`}
             ></div>
           ))}
         </div>
@@ -62,7 +70,8 @@ const LockScreen: React.FC<Props> = ({ user, onUnlock, onLogout }) => {
             <button 
               key={val} 
               onClick={() => handleInput(val)}
-              className="w-full aspect-square flex items-center justify-center rounded-2xl bg-white/10 text-white text-xl font-black hover:bg-white/20 active:bg-orange-500 active:scale-90 transition-all border border-white/5"
+              disabled={isVerifying}
+              className="w-full aspect-square flex items-center justify-center rounded-2xl bg-white/10 text-white text-xl font-black hover:bg-white/20 active:bg-orange-500 active:scale-90 transition-all border border-white/5 disabled:opacity-20"
             >
               {val}
             </button>
@@ -70,15 +79,17 @@ const LockScreen: React.FC<Props> = ({ user, onUnlock, onLogout }) => {
           <div className="w-full"></div>
           <button 
             onClick={() => handleInput('0')}
-            className="w-full aspect-square flex items-center justify-center rounded-2xl bg-white/10 text-white text-xl font-black hover:bg-white/20 active:bg-orange-500 transition-all border border-white/5"
+            disabled={isVerifying}
+            className="w-full aspect-square flex items-center justify-center rounded-2xl bg-white/10 text-white text-xl font-black hover:bg-white/20 active:bg-orange-500 transition-all border border-white/5 disabled:opacity-20"
           >
             0
           </button>
           <button 
             onClick={handleBackspace}
-            className="w-full aspect-square flex items-center justify-center rounded-2xl bg-red-500/20 text-red-300 hover:bg-red-500/30 transition-all border border-red-500/20"
+            disabled={isVerifying}
+            className="w-full aspect-square flex items-center justify-center rounded-2xl bg-red-500/20 text-red-300 hover:bg-red-500/30 transition-all border border-red-500/20 disabled:opacity-20"
           >
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2.5} d="M12 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M3 12l6.41-6.41A2 2 0 0110.83 5H20a2 2 0 012 2v10a2 2 0 01-2 2h-9.17a2 2 0 01-1.42-.59L3 12z" /></svg>
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M3 12l6.41-6.41A2 2 0 0110.83 5H20a2 2 0 012 2v10a2 2 0 01-2 2h-9.17a2 2 0 01-1.42-.59L3 12z" /></svg>
           </button>
         </div>
 
@@ -86,7 +97,7 @@ const LockScreen: React.FC<Props> = ({ user, onUnlock, onLogout }) => {
           onClick={onLogout}
           className="text-white/40 font-black uppercase text-[9px] tracking-[0.4em] hover:text-orange-400 transition-colors"
         >
-          Forgot PIN? Exit System
+          Session Locked? Logout
         </button>
       </div>
     </div>

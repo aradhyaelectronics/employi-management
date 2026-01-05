@@ -265,6 +265,14 @@ const WorkTracking: React.FC<Props> = ({ user, state, addWorkLog }) => {
                       {companySites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                    </select>
                 </div>
+
+                <div className="flex flex-col min-w-[140px]">
+                   <span className="text-[8px] font-black text-orange-600 uppercase mb-1">Work Type</span>
+                   <select className="bg-transparent text-[10px] font-black uppercase outline-none text-slate-700" value={filterWorkType} onChange={e => setFilterWorkType(e.target.value)}>
+                      <option value="">All Types</option>
+                      {Object.values(WorkType).map(wt => <option key={wt} value={wt}>{wt}</option>)}
+                   </select>
+                </div>
                 
                 {(isAdmin || isSuper) && (
                    <div className="flex flex-col min-w-[140px]">

@@ -87,12 +87,14 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  mobile?: string;
+  mobile: string; // TEXT UNIQUE NOT NULL
   role: UserRole;
-  status: UserStatus;
+  status: UserStatus; // DEFAULT 'active'
   companyId: string;
+  company_name?: string; // Aligned with D1 Final
+  address?: string; // Aligned with D1 Final
   password?: string;
-  pin?: string;
+  pin_hash: string; // TEXT NOT NULL (SHA-256)
   supervisorId?: string;
   salaryType?: SalaryType;
   salaryAmount?: number;
@@ -123,16 +125,17 @@ export interface Site {
 }
 
 export interface Attendance {
-  id: string;
-  userId: string;
+  id: string; // INTEGER PRIMARY KEY AUTOINCREMENT
+  userId: string; // user_id INTEGER
   companyId: string;
   siteId?: string; 
-  date: string;
-  checkIn: string;
-  checkOut?: string;
+  date: string; // date TEXT
+  checkIn: string; // check_in TEXT
+  checkOut?: string; // check_out TEXT
+  latitude?: number; // latitude REAL
+  longitude?: number; // longitude REAL
+  isActive: number; // is_active INTEGER DEFAULT 1 (1 = checked in, 0 = checked out)
   overtimeHours?: number;
-  lat?: number;
-  lng?: number;
 }
 
 export interface WorkLog {
@@ -205,6 +208,13 @@ export interface Invoice {
   status: 'SUCCESS' | 'REFUNDED';
 }
 
+export interface OtpRecord {
+  id: string; 
+  mobile: string; 
+  otp: string; 
+  expires_at: number; 
+}
+
 export interface AppState {
   users: User[];
   companies: Company[];
@@ -220,6 +230,7 @@ export interface AppState {
   systemLogs: ServerEvent[];
   integrations: IntegrationConfig;
   invoices: Invoice[];
+  otps: OtpRecord[];
   apkUrl: string;
   version: string;
 }

@@ -1,131 +1,113 @@
 
-import React, { useState, useMemo } from 'react';
-import { User, AppState, UserRole, Task } from '../types';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { ICONS, Logo } from '../constants';
+import React, { useMemo } from 'react';
+import { User, AppState, UserRole } from '../types';
+import { ICONS } from '../constants';
+import AiAdvisor from './AiAdvisor';
 
 interface Props {
   user: User;
   state: AppState;
-  updatePassword?: (id: string, password: string) => Promise<void>;
   updateTaskStatus?: (id: string, status: 'TODO' | 'IN_PROGRESS' | 'DONE') => void;
   getAiSystemContext: (companyId?: string) => any;
 }
 
-const Dashboard: React.FC<Props> = ({ user, state, getAiSystemContext, updateTaskStatus }) => {
+const Dashboard: React.FC<Props> = ({ user, state, getAiSystemContext }) => {
   const isSuper = user.role === UserRole.SUPER_ADMIN;
   const isAdmin = user.role === UserRole.ADMIN;
-  const isSupervisor = user.role === UserRole.SUPERVISOR;
-  
-  const [copied, setCopied] = useState(false);
+  const company = state.companies.find(c => c.id === user.companyId);
 
-  // APK URL from global state
-  const APK_DOWNLOAD_URL = state.apkUrl;
-
-  const handleShareApp = () => {
-    const shareData = {
-      title: 'Pragati Workforce Platform',
-      text: 'Download our official enterprise field application for reporting and attendance:',
-      url: APK_DOWNLOAD_URL
-    };
-
-    if (window.AndroidInterface && (window.AndroidInterface as any).shareApp) {
-      (window.AndroidInterface as any).shareApp(APK_DOWNLOAD_URL);
-    } else if (navigator.share) {
-      navigator.share(shareData).catch(() => {
-        copyToClipboard();
-      });
-    } else {
-      copyToClipboard();
-    }
-  };
-
-  const copyToClipboard = () => {
-    navigator.clipboard.writeText(APK_DOWNLOAD_URL);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-    if (window.AndroidInterface) window.AndroidInterface.showToast("App Link Copied!");
-  };
+  const daysRemaining = useMemo(() => {
+    if (!company?.subscriptionExpiry) return null;
+    const diff = new Date(company.subscriptionExpiry).getTime() - Date.now();
+    return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+  }, [company]);
 
   const stats = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
+    const liveAttendance = state.attendance.filter(a => a.date === today && a.isActive === 1);
+    
     if (isSuper) {
       return [
-        { label: 'Enterprises', value: state.companies.length, color: 'text-blue-600' },
-        { label: 'Total Personnel', value: state.users.length, color: 'text-green-600' },
-        { label: 'Global Traffic', value: state.workLogs.length, color: 'text-orange-600' },
-        { label: 'Blocked Nodes', value: state.companies.filter(c => c.status === 'BLOCKED').length, color: 'text-red-600' },
+        { label: 'Total Clusters', value: state.companies.length, icon: ICONS.Shield, color: 'text-blue-600', bg: 'bg-blue-50' },
+        { label: 'Total Personnel', value: state.users.length, icon: ICONS.Users, color: 'text-green-600', bg: 'bg-green-50' },
+        { label: 'Live Present', value: liveAttendance.length, icon: ICONS.Time, color: 'text-orange-600', bg: 'bg-orange-50' },
       ];
     }
-    const companyUsers = state.users.filter(u => u.companyId === user.companyId);
-    const companyWork = state.workLogs.filter(l => l.companyId === user.companyId);
-    if (isAdmin) {
-      return [
-        { label: 'Workforce', value: companyUsers.length, color: 'text-blue-600' },
-        { label: 'Output (M)', value: companyWork.reduce((sum, l) => sum + l.meters, 0), color: 'text-green-600' },
-        { label: 'Pending', value: state.requests.filter(r => r.companyId === user.companyId && r.status === 'PENDING').length, color: 'text-orange-600' },
-        { label: 'Sites', value: state.sites.filter(s => s.companyId === user.companyId).length, color: 'text-purple-600' },
-      ];
-    }
+
+    const companyAttendance = liveAttendance.filter(a => a.companyId === user.companyId);
+    const myWork = state.workLogs.filter(l => l.companyId === user.companyId);
+
     return [
-      { label: 'My Output', value: `${state.workLogs.filter(l => l.userId === user.id).reduce((s,l)=>s+l.meters,0)}m`, color: 'text-blue-600' },
-      { label: 'Adv Approved', value: `₹${state.requests.filter(r => r.userId === user.id && r.status === 'APPROVED').reduce((s,r)=>s+r.amount,0)}`, color: 'text-orange-600' },
+      { label: 'Live Staff', value: companyAttendance.length, icon: ICONS.Time, color: 'text-orange-600', bg: 'bg-orange-50' },
+      { label: 'Total Units', value: myWork.reduce((s,l)=>s+l.meters,0), icon: ICONS.Document, color: 'text-green-600', bg: 'bg-green-50' },
+      { label: 'Active Sites', value: state.sites.filter(s => s.companyId === user.companyId).length, icon: ICONS.Work, color: 'text-blue-600', bg: 'bg-blue-50' },
     ];
-  }, [state, user, isSuper, isAdmin]);
+  }, [state, user, isSuper]);
 
   return (
-    <div className="space-y-6 pb-10">
-      <div className="grid grid-cols-2 gap-3">
+    <div className="space-y-10 animate-in fade-in duration-700 pb-24">
+      {/* Hero / Header Card */}
+      <div className="bg-slate-900 p-12 rounded-[3.5rem] text-white shadow-2xl relative overflow-hidden border border-slate-800">
+        <div className="absolute top-0 right-0 w-80 h-80 bg-blue-500/10 blur-[120px] rounded-full"></div>
+        <div className="relative z-10">
+          <div className="flex flex-wrap items-center gap-4 mb-4">
+             <div className="flex items-center space-x-2">
+                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                <p className="text-blue-400 text-[10px] font-black uppercase tracking-[0.4em]">Node-01 • Secure</p>
+             </div>
+             {(isAdmin || isSuper) && daysRemaining !== null && (
+                <div className={`px-4 py-1.5 rounded-full text-[8px] font-black uppercase tracking-widest border ${daysRemaining < 7 ? 'bg-red-500 text-white border-red-400 animate-bounce' : 'bg-white/5 text-blue-300 border-white/10'}`}>
+                   License Status: {daysRemaining} Days Left
+                </div>
+             )}
+          </div>
+          <h1 className="text-4xl md:text-6xl font-black tracking-tighter uppercase leading-tight">
+            Pragati Cloud <br /> <span className="text-blue-400">नमस्ते, {user.name.split(' ')[0]}</span>
+          </h1>
+          <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mt-6 max-w-sm leading-relaxed">
+            Enterprise Workforce Telemetry & Operational Analytics Terminal.
+          </p>
+        </div>
+      </div>
+
+      {(isAdmin || isSuper) && <AiAdvisor context={getAiSystemContext(isSuper ? undefined : user.companyId)} />}
+
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-8">
         {stats.map((stat, idx) => (
-          <div key={idx} className="bg-white px-4 py-5 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-center items-center text-center">
-            <p className="text-gray-400 text-[8px] font-black uppercase tracking-[0.2em] mb-1">{stat.label}</p>
-            <p className={`text-lg font-black tracking-tighter ${stat.color}`}>{stat.value}</p>
+          <div key={idx} className="bg-white p-10 rounded-[3rem] shadow-sm border border-gray-100 transition-all hover:shadow-2xl hover:scale-[1.02]">
+            <div className={`w-14 h-14 ${stat.bg} rounded-2xl flex items-center justify-center mb-8 shadow-inner`}>
+              <stat.icon className={`w-7 h-7 ${stat.color}`} />
+            </div>
+            <p className="text-gray-400 text-[10px] font-black uppercase tracking-[0.2em] mb-1.5">{stat.label}</p>
+            <p className={`text-4xl font-black ${stat.color} tracking-tighter`}>{stat.value}</p>
           </div>
         ))}
       </div>
 
-      {(isAdmin || isSupervisor) && (
-        <div className="bg-slate-900 p-8 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden border border-slate-800 group">
-           <div className="absolute top-0 right-0 w-48 h-48 bg-blue-600/10 blur-[60px] rounded-full -mr-24 -mt-24 group-hover:bg-blue-600/20 transition-all"></div>
-           <div className="relative z-10">
-              <div className="flex items-center space-x-3 mb-4">
-                 <div className="p-3 bg-green-500/10 rounded-xl">
-                    <ICONS.Android className="w-6 h-6 text-green-500" />
+      <div className="bg-white p-12 rounded-[3.5rem] shadow-sm border border-gray-100">
+         <div className="flex justify-between items-center mb-10">
+            <h3 className="text-sm font-black text-slate-900 uppercase tracking-[0.3em]">Operational Pulse</h3>
+            <span className="text-[9px] font-black text-blue-600 bg-blue-50 px-4 py-1.5 rounded-full uppercase">Real-Time Sync</span>
+         </div>
+         <div className="space-y-6">
+            {state.workLogs.filter(l => isSuper || l.companyId === user.companyId).slice(-4).reverse().map(log => {
+               const emp = state.users.find(u => u.id === log.userId);
+               return (
+                 <div key={log.id} className="flex items-center justify-between p-6 hover:bg-slate-50 rounded-[2.5rem] transition-all border border-transparent hover:border-slate-100">
+                    <div className="flex items-center space-x-5">
+                       <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 font-black text-sm">W</div>
+                       <div>
+                          <p className="text-xs font-black uppercase text-slate-800 tracking-tight">{emp?.name}</p>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{log.workType}</p>
+                       </div>
+                    </div>
+                    <div className="text-right">
+                       <p className="text-lg font-black text-green-600">{log.meters}m</p>
+                       <p className="text-[8px] font-black text-slate-300 uppercase">{log.installationDate}</p>
+                    </div>
                  </div>
-                 <div>
-                    <h3 className="text-sm font-black uppercase tracking-widest text-white">Pragati Android APK</h3>
-                    <p className="text-[8px] font-bold text-slate-500 uppercase tracking-[0.2em]">Build v4.8.2-Stable</p>
-                 </div>
-              </div>
-              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-relaxed mb-6">
-                 Authorized Field Application. Share this link with your employees to allow them to report attendance and work telemetry.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-3">
-                 <button 
-                  onClick={handleShareApp} 
-                  className="flex-1 bg-blue-600 hover:bg-blue-500 py-4 rounded-xl font-black text-[9px] uppercase tracking-widest shadow-xl flex items-center justify-center space-x-2 transition-all active:scale-95"
-                 >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
-                    <span>{copied ? 'Link Copied!' : 'Share App Link'}</span>
-                 </button>
-                 <a 
-                  href={APK_DOWNLOAD_URL} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="px-6 bg-slate-800 hover:bg-slate-700 py-4 rounded-xl font-black text-[9px] uppercase tracking-widest flex items-center justify-center transition-all border border-slate-700 hover:border-slate-500"
-                 >
-                    <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                    Download
-                 </a>
-              </div>
-           </div>
-        </div>
-      )}
-
-      <div className="bg-gradient-to-br from-[#0D47A1] to-[#1a237e] p-8 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden">
-         <div className="relative z-10">
-            <h2 className="text-3xl font-black tracking-tighter mb-2">Hello, {user.name.split(' ')[0]}</h2>
-            <p className="text-xs text-blue-100/70 font-bold mb-8">Node status: STABLE. Ready for telemetry sync.</p>
-            <button className="w-full bg-white text-[#0D47A1] py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl">Get AI Insights</button>
+               );
+            })}
          </div>
       </div>
     </div>
