@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -8,12 +7,16 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="mobile-web-app-capable" content="yes">
-    <title>ManagerEmployee | Mobile</title>
+    <meta name="description" content="Pragati Workforce Master - Enterprise Field Management & Telemetry">
+    <title>ManagerEmployee | Pragati Cloud</title>
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+    
     <style>
       :root {
         --safe-top: env(safe-area-inset-top);
@@ -27,21 +30,12 @@
         user-select: none;
         overscroll-behavior-y: contain;
         overflow-x: hidden;
+        margin: 0;
       }
       #root {
         min-height: 100vh;
         display: flex;
         flex-direction: column;
-      }
-      /* Android Ripple Effect Emulation */
-      .active-state:active {
-        background-color: rgba(0, 0, 0, 0.05);
-        transform: scale(0.98);
-      }
-      /* Mobile Scrollbar Hide */
-      .custom-scrollbar::-webkit-scrollbar {
-        width: 0px;
-        background: transparent;
       }
       /* Professional Splash Screen */
       #splash {
@@ -69,36 +63,48 @@
         0% { transform: rotate(0deg); }
         100% { transform: rotate(360deg); }
       }
-      /* SafeArea padding for bottom nav */
+      /* Hide scrollbars for mobile UI */
+      .custom-scrollbar::-webkit-scrollbar {
+        width: 0px;
+        background: transparent;
+      }
       .safe-bottom-padding {
-        padding-bottom: calc(env(safe-area-inset-bottom) + 5rem);
+        padding-bottom: calc(env(safe-area-inset-bottom) + 6rem);
       }
     </style>
-  <script type="importmap">
-{
-  "imports": {
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "react": "https://esm.sh/react@^19.2.3/",
-    "recharts": "https://esm.sh/recharts@^3.6.0",
-    "@google/genai": "https://esm.sh/@google/genai@^1.34.0"
-  }
-}
-</script>
-</head>
-  <body class="safe-top">
+
+    <script type="importmap">
+    {
+      "imports": {
+        "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+        "react/": "https://esm.sh/react@^19.2.3/",
+        "react": "https://esm.sh/react@^19.2.3/",
+        "recharts": "https://esm.sh/recharts@^3.6.0",
+        "@google/genai": "https://esm.sh/@google/genai@^1.34.0"
+      }
+    }
+    </script>
+  </head>
+  <body>
     <div id="splash">
       <div class="loader"></div>
-      <p style="color: white; font-weight: 900; margin-top: 20px; letter-spacing: 0.2em; font-size: 10px; text-transform: uppercase;">MANAGEREMPLOYEE INITIALIZING</p>
+      <p style="color: white; font-weight: 900; margin-top: 20px; letter-spacing: 0.3em; font-size: 10px; text-transform: uppercase; font-family: 'Inter', sans-serif;">PRAGATI CLOUD INITIALIZING</p>
     </div>
+
     <div id="root"></div>
+
+    <!-- Application Entry Point -->
+    <script type="module" src="./index.tsx"></script>
+
     <script>
       window.addEventListener('load', () => {
         const splash = document.getElementById('splash');
         setTimeout(() => {
-          splash.style.opacity = '0';
-          splash.style.visibility = 'hidden';
-        }, 1200);
+          if (splash) {
+            splash.style.opacity = '0';
+            splash.style.visibility = 'hidden';
+          }
+        }, 1500);
       });
     </script>
   </body>
